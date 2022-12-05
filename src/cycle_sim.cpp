@@ -18,6 +18,7 @@
 #define ILLEGAL_INST 3
 #define NUM_REGS 32
 
+// TODO HAZARDS AND FORWARDING
 
 extern void dumpRegisterStateInternal(RegisterInfo & reg, std::ostream & reg_out);
 
@@ -139,20 +140,36 @@ struct ID_STAGE{
 
 struct EX_STAGE{
     DecodedInst decodedInst;
-    uint32_t npc; //???
+    uint32_t npc; 
+    uint32_t readData1;
     uint32_t readData2;
     uint32_t aluResult;
+
+    // Control 
+    bool regDst;
+    bool ALUOp1;
+    bool ALUOp2;
+    bool ALUSrc;
 };    
 
 struct MEM_STAGE{
     DecodedInst decodedInst;
     uint32_t aluResult;
     uint32_t data; 
+
+    // Control
+    bool memRead;
+    bool memWrite;
+    bool branch;
 };
 
 struct WB_STAGE{
     DecodedInst decodedInst;
     uint32_t data;
+
+    // Control
+    bool regWrite;
+    bool memToReg;
 };
 
 struct STATE
@@ -165,6 +182,7 @@ struct STATE
     MEM_STAGE mem_stage;
     WB_STAGE wb_stage;
 };
+
 
 // Print State
 void printState(STATE & state, std::ostream & out, bool printReg)
@@ -221,14 +239,26 @@ void decodeInst(uint32_t inst, DecodedInst & decodedInst){
         decodedInst.addr = instructBits(inst, 25, 0) << 2;
 }
 // *------------------------------------------------------------*
+// Update Control Signal Helpers
+// *------------------------------------------------------------*
+
+// Updates control signals  for exec stage
+void execControl(State &state){
+    // Control Logic
+    switch(state.exec_stage.decodedInst.op){
+        case OP_RTYPE:
+            state.ex_stage.regDst = true;
+            state.ex_stage.ALUOp1 = true;
+            state.ex_stage.ALUOp2 = false;
+            state.ex_stage.ALUSrc = false;
+            break;
+        //TODO more 
+    }
+}
 
 // Instruction Execution Helpers TODO
 // *------------------------------------------------------------*
-// do load
-void doLoad(STATE &state)
-{
-    return;
-}
+
 
 // *------------------------------------------------------------*
 
