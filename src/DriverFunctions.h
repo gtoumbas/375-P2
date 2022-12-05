@@ -13,7 +13,7 @@ struct PipeState
 struct SimulationStats
 {
     uint32_t totalCycles;
-    uint32_t icHits;
+    uint32_t icHits; 
     uint32_t icMisses;
     uint32_t dcHits;
     uint32_t dcMisses;
