@@ -128,6 +128,9 @@ struct DecodedInst{
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
+
+    uint32_t readReg1;
+    uint32_t readReg2;
 };
 
 struct ID_EX_STAGE{
