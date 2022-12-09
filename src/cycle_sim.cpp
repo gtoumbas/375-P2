@@ -443,7 +443,7 @@ void EX(STATE & state){
             readData1 = state.id_ex_stage.readData1;
     }
     // set readReg2
-    switch (state.fwd -> forward1) {
+    switch (state.fwd -> forward2) {
         case HAZARD_TYPE::EX:
             readData2 =  state.ex_mem_stage.aluResult;
             break;
