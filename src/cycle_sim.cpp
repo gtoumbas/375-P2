@@ -128,10 +128,6 @@ struct DecodedInst{
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
-    DecodedInst decodedInst;
-
-    uint32_t readReg1;
-    uint32_t readReg2;
 };
 
 struct ID_EX_STAGE{
@@ -185,11 +181,48 @@ struct MEM_WB_STAGE{
     bool branch;
 };
 
-struct FORWARD_UNIT; // do not delete or compilation error
+// Instruction Helpers (Decoding)
+// *------------------------------------------------------------*
+// extract specific bits [start, end] from an instruction
+uint instructBits(uint32_t instruct, int start, int end)
+{
+    int run = start - end + 1;
+    uint32_t mask = (1 << run) - 1;
+    uint32_t clipped = instruct >> end;
+    return clipped & mask;
+}
 
+// sign extend while keeping values as uint's
+uint32_t signExt(uint16_t smol)
+{
+    uint32_t x = smol;
+    uint32_t extension = 0xffff0000;
+    return (smol & 0x8000) ? x ^ extension : x;
+}
+
+// Function to decode instruction
+void decodeInst(uint32_t inst, DecodedInst & decodedInst){
+        decodedInst.instr = inst;
+        decodedInst.op = instructBits(inst, 31, 26);
+        decodedInst.rs = instructBits(inst, 25, 21);
+        decodedInst.rt = instructBits(inst, 20, 16);
+        decodedInst.rd = instructBits(inst, 15, 11);
+        decodedInst.shamt = instructBits(inst, 10, 6);
+        decodedInst.funct = instructBits(inst, 5, 0);
+        decodedInst.imm = instructBits(inst, 15, 0);
+        decodedInst.signExtIm = signExt(decodedInst.imm);
+        decodedInst.zeroExtImm = decodedInst.imm;
+        decodedInst.addr = instructBits(inst, 25, 0) << 2;
+}
+
+
+// HAZARD + FORWARD UNITS AND STATE
+// *------------------------------------------------------------*
+struct FORWARD_UNIT; // do not delete or compilation error
+struct HAZARD_UNIT;  // do not delete or compilation error
 struct STATE
 {
-    uint32_t pc;
+    uint32_t pc, branch_pc;
     uint32_t cycles;
     IF_ID_STAGE if_id_stage;
     ID_EX_STAGE id_ex_stage;
@@ -197,7 +230,9 @@ struct STATE
     MEM_WB_STAGE mem_wb_stage;
     // added by Amir
     FORWARD_UNIT* fwd;  // do not change, it must be pointer
+    HAZARD_UNIT*  hzd;
     bool stall;
+    bool delay;
 };
 
 // HAZARD DETECTION AND FORWARDING
@@ -234,46 +269,62 @@ private:
 
     bool checkEX1(STATE& state) 
     {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
-            (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg1);
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
+            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
     }
 
     bool checkEX2(STATE& state) 
     {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
-            (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg2);
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
+            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt);
     }
 
 
     bool checkMEM1(STATE& state) 
     {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
-            (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg1);
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
+            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
     }
 
     bool checkMEM2(STATE& state) 
     {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
-            (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg2); 
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
+            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt); 
     }
 };
 
 
 struct HAZARD_UNIT 
 {
+    bool if_id_flush;
+    bool branch;
+
     void checkLoadUse(STATE& state) 
     {
-        if (state.id_ex_stage.memRead && ((state.id_ex_stage.regDst == state.if_id_stage.readReg1) ||
-            (state.id_ex_stage.regDst == state.if_id_stage.readReg2))) {
+        uint32_t if_id_reg1 = instructBits(state.if_id_stage.instr, 25, 21);
+        uint32_t if_id_reg2 = instructBits(state.if_id_stage.instr, 20, 16);
+        if (state.id_ex_stage.memRead && ((state.id_ex_stage.decodedInst.rt == if_id_reg1) ||
+            (state.id_ex_stage.decodedInst.rt == if_id_reg2))) {
                 state.stall = true;
         } else {
             state.stall = false;
         }
     }
 
-    private:
+    // done during the id stage
+    void checkBranch(STATE& state, DecodedInst& decodedInst) 
+    {
+        uint32_t readReg1 = regs[decodedInst.rs];
+        uint32_t readReg2 = regs[decodedInst.rt];
 
-
+        if (/*is_branch &&*/ (readReg1 == readReg2)) {
+            state.delay = true;
+            if_id_flush = true;
+        } else {
+            state.delay = false;
+            if_id_flush = false;
+        }
+    }
 };
 
 
@@ -298,39 +349,7 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 }
 
 
-// Instruction Helpers (Decoding)
-// *------------------------------------------------------------*
-// extract specific bits [start, end] from an instruction
-uint instructBits(uint32_t instruct, int start, int end)
-{
-    int run = start - end + 1;
-    uint32_t mask = (1 << run) - 1;
-    uint32_t clipped = instruct >> end;
-    return clipped & mask;
-}
 
-// sign extend while keeping values as uint's
-uint32_t signExt(uint16_t smol)
-{
-    uint32_t x = smol;
-    uint32_t extension = 0xffff0000;
-    return (smol & 0x8000) ? x ^ extension : x;
-}
-
-// Function to decode instruction
-void decodeInst(uint32_t inst, DecodedInst & decodedInst){
-        decodedInst.instr = inst;
-        decodedInst.op = instructBits(inst, 31, 26);
-        decodedInst.rs = instructBits(inst, 25, 21);
-        decodedInst.rt = instructBits(inst, 20, 16);
-        decodedInst.rd = instructBits(inst, 15, 11);
-        decodedInst.shamt = instructBits(inst, 10, 6);
-        decodedInst.funct = instructBits(inst, 5, 0);
-        decodedInst.imm = instructBits(inst, 15, 0);
-        decodedInst.signExtIm = signExt(decodedInst.imm);
-        decodedInst.zeroExtImm = decodedInst.imm;
-        decodedInst.addr = instructBits(inst, 25, 0) << 2;
-}
 // *------------------------------------------------------------*
 // Control 
 // *------------------------------------------------------------*
@@ -399,28 +418,41 @@ void updateControl(STATE & state, DecodedInst & decIns){
 // Function for each stage
 // *------------------------------------------------------------*
 void IF(STATE & state){
-    // Read instruction from memory
     uint32_t instr = 0;
-    // TODO ERROR HANDLING
+
+    // mux. if control_hazard.branch asserted, then jump to new address
+    if (state.hzd -> branch) {
+        state.pc = state.branch_pc;
+    } 
+
+    // fetch instruction
     mem->getMemValue(state.pc, instr, WORD_SIZE);
+    
     // Update state
     state.if_id_stage.instr = instr;
     state.if_id_stage.npc = state.pc + 4;
+
+    // increment pc
+    state.pc += 4;
 }
 
 
 void ID(STATE& state){
     
-    // Read instruction from IF stage
+    // Read instruction from IF stage and Decode
     uint32_t instr = state.if_id_stage.instr;
-    
-    // Decode instruction
     DecodedInst decodedInst;
     decodeInst(instr, decodedInst);
-
-    // Read registers
     uint32_t readReg1 = regs[decodedInst.rs];
     uint32_t readReg2 = regs[decodedInst.rt];
+
+    // to do: 
+    // 1) Sign extending immediate and slt << 2 (jump)
+    // branch_addr = (signExtImm << 2)
+    // 2) Branch ALU + readReg comparison
+
+    state.branch_pc = decodedInst.signExtIm << 2;
+    state.hzd -> checkBranch(state, decodedInst); // sets up hzd.IF_ID_FLUSH, state.delay
 
     // Update state
     state.id_ex_stage.decodedInst = decodedInst;
@@ -429,13 +461,50 @@ void ID(STATE& state){
     state.id_ex_stage.readReg2 = readReg2;
     state.id_ex_stage.readData1 = readReg1;
     state.id_ex_stage.readData2 = readReg2;
+
+    // 3) flush if/id if needed ---- equivalent to NOP
+    if (state.hzd -> if_id_flush) {
+        state.if_id_stage.instr = 0;
+        state.if_id_stage.npc = 0;
+    }
 }
 
 
 void EX(STATE & state){
-   // Need todo ALU stuff + control 
+    // need to do forwarding
+    state.fwd->checkFwd(state);
+    uint32_t readData1, readData2; 
+
+    // set readReg1
+    switch (state.fwd -> forward1) {
+        case HAZARD_TYPE::EX:
+            readData1 = state.ex_mem_stage.aluResult;
+            break;
+        
+        case HAZARD_TYPE::MEM:
+            readData1 = state.mem_wb_stage.aluResult;
+            break;
+
+        case HAZARD_TYPE::NONE:
+            readData1 = state.id_ex_stage.readData1;
+    }
+    // set readReg2
+    switch (state.fwd -> forward2) {
+        case HAZARD_TYPE::EX:
+            readData2 =  state.ex_mem_stage.aluResult;
+            break;
+        
+        case HAZARD_TYPE::MEM:
+            readData2 = state.mem_wb_stage.aluResult;
+            break;
+
+        case HAZARD_TYPE::NONE:
+            readData2 = state.id_ex_stage.readData2;
+    }
+
 
     // Do instruction specific stuff
+    doLoad(state);
 
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
