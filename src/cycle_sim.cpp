@@ -190,6 +190,7 @@ struct STATE
     // added by Amir
     FORWARD_UNIT* fwd;  // do not change, it must be pointer
     bool stall;
+    bool delay;
 };
 
 // HAZARD DETECTION AND FORWARDING
@@ -263,9 +264,15 @@ struct HAZARD_UNIT
         }
     }
 
-    private:
-
-
+    // done during the id stage
+    void checkBranch(STATE& state) 
+    {
+        if (/*is_branch &&*/ (state.id_ex_stage.readData1 == state.id_ex_stage.readData2)) {
+            state.delay = true;
+        } else {
+            state.delay = false;
+        }
+    }
 };
 
 
