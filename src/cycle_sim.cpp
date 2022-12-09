@@ -128,6 +128,9 @@ struct DecodedInst{
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
+
+    uint32_t readReg1;
+    uint32_t readReg2;
 };
 
 struct ID_EX_STAGE{
@@ -139,6 +142,7 @@ struct ID_EX_STAGE{
     uint32_t readData1;
     uint32_t readData2;
 
+    bool memRead;
     bool regDst;
     bool regWrite;
 };    
@@ -185,6 +189,7 @@ struct STATE
     MEM_WB_STAGE mem_wb_stage;
     // added by Amir
     FORWARD_UNIT* fwd;  // do not change, it must be pointer
+    bool stall;
 };
 
 // HAZARD DETECTION AND FORWARDING
@@ -217,12 +222,6 @@ struct FORWARD_UNIT
             forward2 = HAZARD_TYPE::NONE;
         } 
     }
-
-    void checkLoadUse(STATE &state)
-    {
-
-    }
-
 private:
 
     bool checkEX1(STATE& state) 
@@ -254,7 +253,15 @@ private:
 
 struct HAZARD_UNIT 
 {
-
+    void checkLoadUse(STATE& state) 
+    {
+        if (state.id_ex_stage.memRead && ((state.id_ex_stage.regDst == state.if_id_stage.readReg1) ||
+            (state.id_ex_stage.regDst == state.if_id_stage.readReg2))) {
+                state.stall = true;
+        } else {
+            state.stall = false;
+        }
+    }
 
     private:
 
