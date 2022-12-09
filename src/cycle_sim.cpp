@@ -407,7 +407,7 @@ void ID(STATE& state){
 
     state.branch_pc = decodedInst.signExtIm << 2;
     state.hzd -> checkBranch(state, decodedInst); // sets up hzd.IF_ID_FLUSH, state.delay
- 
+
     // Update state
     state.id_ex_stage.decodedInst = decodedInst;
     state.id_ex_stage.npc = state.if_id_stage.npc;
@@ -415,12 +415,50 @@ void ID(STATE& state){
     state.id_ex_stage.readReg2 = readReg2;
     state.id_ex_stage.readData1 = readReg1;
     state.id_ex_stage.readData2 = readReg2;
+
+    // 3) flush if/id if needed ---- equivalent to NOP
+    if (state.hzd -> if_id_flush) {
+        state.if_id_stage.instr = 0;
+        state.if_id_stage.npc = 0;
+    }
 }
 
 
 void EX(STATE & state){
+    // need to do forwarding
+    state.fwd->checkFwd(state);
+    uint32_t readData1, readData2; 
+
+    // set readReg1
+    switch (state.fwd -> forward1) {
+        case HAZARD_TYPE::EX:
+            readData1 = state.ex_mem_stage.aluResult;
+            break;
+        
+        case HAZARD_TYPE::MEM:
+            readData1 = state.mem_wb_stage.aluResult;
+            break;
+
+        case HAZARD_TYPE::NONE:
+            readData1 = state.id_ex_stage.readData1;
+    }
+    // set readReg2
+    switch (state.fwd -> forward1) {
+        case HAZARD_TYPE::EX:
+            readData2 =  state.ex_mem_stage.aluResult;
+            break;
+        
+        case HAZARD_TYPE::MEM:
+            readData2 = state.mem_wb_stage.aluResult;
+            break;
+
+        case HAZARD_TYPE::NONE:
+            readData2 = state.id_ex_stage.readData2;
+    }
+
+
     // Do instruction specific stuff
-    doLoad(state);
+    doLoad(state, readData1, readData2);
 
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
