@@ -335,9 +335,7 @@ void decodeInst(uint32_t inst, DecodedInst & decodedInst){
 // Control 
 // *------------------------------------------------------------*
 
-void updateControl(STATE & state){
-    // Get instruction from IF_ID stage
-    DecodedInst decIns = state.if_id_stage.decodedInst;
+void updateControl(STATE & state, DecodedInst & decIns){
     // Switch statement on op type
     switch(decIns.op){
         case OP_ZERO: // R type
