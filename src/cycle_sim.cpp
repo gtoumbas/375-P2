@@ -135,10 +135,11 @@ struct ID_EX_STAGE{
     uint32_t npc;
     uint32_t readReg1;
     uint32_t readReg2;
-    uint32_t regDest;
+    uint32_t writeReg;
     uint32_t readData1;
     uint32_t readData2;
 
+    bool regDst;
     bool regWrite;
 };    
 
@@ -147,10 +148,11 @@ struct EX_MEM_STAGE{
     uint32_t npc; 
     uint32_t readData1;
     uint32_t readData2;
-    uint32_t regDest;
+    uint32_t writeReg;
     uint32_t aluResult;
 
     // Control 
+    bool regDst;
     bool regWrite;
     bool ALUOp1;
     bool ALUOp2;
@@ -159,25 +161,36 @@ struct EX_MEM_STAGE{
 
 struct MEM_WB_STAGE{
     DecodedInst decodedInst;
-    uint32_t regDest;
+    uint32_t writeReg;
     uint32_t aluResult;
     uint32_t data; 
 
     // Control
+    bool regDst;
     bool regWrite;
     bool memRead;
     bool memWrite;
     bool branch;
 };
 
+struct FORWARD_UNIT; // do not delete or compilation error
+
+struct STATE
+{
+    uint32_t pc;
+    uint32_t cycles;
+    IF_ID_STAGE if_id_stage;
+    ID_EX_STAGE id_ex_stage;
+    EX_MEM_STAGE ex_mem_stage;
+    MEM_WB_STAGE mem_wb_stage;
+    // added by Amir
+    FORWARD_UNIT* fwd;  // do not change, it must be pointer
+};
 
 // HAZARD DETECTION AND FORWARDING
-
 enum class HAZARD_TYPE{
     NONE, EX, MEM
 };
-
-
 
 struct FORWARD_UNIT 
 {
@@ -206,39 +219,25 @@ struct FORWARD_UNIT
 private:
 
     bool checkEX1(STATE& state) {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.regDest != 0) &&
-            (state.ex_mem_stage.regDest == state.id_ex_stage.readReg1);
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
+            (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg1);
     }
 
     bool checkEX2(STATE& state) {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.regDest != 0) &&
-            (state.ex_mem_stage.regDest == state.id_ex_stage.readReg2);
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
+            (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg2);
     }
 
 
     bool checkMEM1(STATE& state) {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.regDest != 0) &&
-            (state.mem_wb_stage.regDest == state.id_ex_stage.readReg1);
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
+            (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg1);
     }
 
     bool checkMEM2(STATE& state) {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.regDest != 0) &&
-            (state.mem_wb_stage.regDest == state.id_ex_stage.readReg2); 
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
+            (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg2); 
     }
-};
-
-
-
-struct STATE
-{
-    uint32_t pc;
-    uint32_t cycles;
-    IF_ID_STAGE if_id_stage;
-    ID_EX_STAGE id_ex_stage;
-    EX_MEM_STAGE ex_mem_stage;
-    MEM_WB_STAGE mem_wb_stage;
-    // added by Amir
-    FORWARD_UNIT fwd;
 };
 
 
@@ -305,7 +304,7 @@ void execControl(STATE& state){
     // Control Logic
     switch(state.ex_mem_stage.decodedInst.op){
         case OP_RTYPE:
-            state.ex_mem_stage.regDst = true;
+            state.ex_mem_stage.regDst = true; // i deleted this field, need to rename regDst
             state.ex_mem_stage.ALUOp1 = true;
             state.ex_mem_stage.ALUOp2 = false;
             state.ex_mem_stage.ALUSrc = false;
@@ -381,8 +380,6 @@ void MEM(STATE & state){
 
 
 void WB(STATE & state){
-    state.wb_stage.decodedInst = state.mem_stage.decodedInst;
-    state.wb_stage.data = state.mem_stage.data;
 
     // Do actual write back stuff
 }
