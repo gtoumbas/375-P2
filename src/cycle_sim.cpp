@@ -18,7 +18,14 @@
 #define ILLEGAL_INST 3
 #define NUM_REGS 32
 
-// TODO HAZARDS AND FORWARDING
+// TODO 
+// ID Stage Exceptions (Amir) && Initialize Control unit in ID
+// EX Stage Exceptions (George)
+// Execute instructions function (Later)
+// Execute (R, I, J) Functions
+// I, R Instructions (George)
+// J Instruction function (Amir)
+// Last: Cache 
 
 extern void dumpRegisterStateInternal(RegisterInfo & reg, std::ostream & reg_out);
 
@@ -319,12 +326,12 @@ struct HAZARD_UNIT
     {
         uint32_t readReg1 = regs[decodedInst.rs];
         uint32_t readReg2 = regs[decodedInst.rt];
-
+        // done in the ID stage
         if (/*is_branch &&*/ (readReg1 == readReg2)) {
-            state.delay = true;
+            branch = true;
             if_id_flush = true;
         } else {
-            state.delay = false;
+            branch = false;
             if_id_flush = false;
         }
     }
@@ -428,6 +435,7 @@ void IF(STATE & state){
         state.pc = state.branch_pc;
     } 
 
+
     // fetch instruction
     mem->getMemValue(state.pc, instr, WORD_SIZE);
     
@@ -473,7 +481,8 @@ void ID(STATE& state){
 }
 
 
-void EX(STATE & state){
+void EX(STATE & state)
+{
     // need to do forwarding
     state.fwd->checkFwd(state);
     uint32_t readData1, readData2; 
@@ -505,10 +514,9 @@ void EX(STATE & state){
             readData2 = state.id_ex_stage.readData2;
     }
 
+    executeInstruction();
 
     // Do instruction specific stuff
-    doLoad(state);
-
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.readData2 = state.id_ex_stage.readData2; 
