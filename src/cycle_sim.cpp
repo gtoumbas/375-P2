@@ -305,9 +305,12 @@ struct HAZARD_UNIT
     }
 
     // done during the id stage
-    void checkBranch(STATE& state) 
+    void checkBranch(STATE& state, DecodedInst& decodedInst) 
     {
-        if (/*is_branch &&*/ (state.id_ex_stage.readData1 == state.id_ex_stage.readData2)) {
+        uint32_t readReg1 = regs[decodedInst.rs];
+        uint32_t readReg2 = regs[decodedInst.rt];
+
+        if (/*is_branch &&*/ (readReg1 == readReg2)) {
             state.delay = true;
             if_id_flush = true;
         } else {
@@ -390,17 +393,21 @@ void IF(STATE & state){
 
 void ID(STATE& state){
     
-    // Read instruction from IF stage
+    // Read instruction from IF stage and Decode
     uint32_t instr = state.if_id_stage.instr;
-    
-    // Decode instruction
     DecodedInst decodedInst;
     decodeInst(instr, decodedInst);
-
-    // Read registers:
     uint32_t readReg1 = regs[decodedInst.rs];
     uint32_t readReg2 = regs[decodedInst.rt];
 
+    // to do: 
+    // 1) Sign extending immediate and slt << 2 (jump)
+    // branch_addr = (signExtImm << 2)
+    // 2) Branch ALU + readReg comparison
+
+    state.branch_pc = decodedInst.signExtIm << 2;
+    state.hzd -> checkBranch(state, decodedInst); // sets up hzd.IF_ID_FLUSH, state.delay
+ 
     // Update state
     state.id_ex_stage.decodedInst = decodedInst;
     state.id_ex_stage.npc = state.if_id_stage.npc;
@@ -412,8 +419,6 @@ void ID(STATE& state){
 
 
 void EX(STATE & state){
-   // Need todo ALU stuff + control 
-
     // Do instruction specific stuff
     doLoad(state);
 
