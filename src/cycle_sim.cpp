@@ -197,47 +197,68 @@ struct FORWARD_UNIT
     HAZARD_TYPE forward1;
     HAZARD_TYPE forward2;
 
-    void checkHazardEX(STATE& state) {
+    void checkFwd(STATE& state) 
+    {
+        // forward1
         if (checkEX1(state)) {
             forward1 = HAZARD_TYPE::EX;
+        } else if (checkMEM1(state)) {
+            forward1 = HAZARD_TYPE::MEM;
+        } else {
+            forward1 = HAZARD_TYPE::NONE;
         }
+
+        // forward2
         if (checkEX2(state)) {
             forward2 = HAZARD_TYPE::EX;
-        }
-    }
-
-    void checkHazardMEM(STATE& state) {
-        if (checkMEM1(state) && !checkEX1(state)) {
-            forward1 = HAZARD_TYPE::MEM;
-        }
-        if (checkEX2(state) && !checkEX2(state)) {
+        } else if (checkMEM2(state)) {
             forward2 = HAZARD_TYPE::MEM;
-        }
+        } else {
+            forward2 = HAZARD_TYPE::NONE;
+        } 
     }
 
+    void checkLoadUse(STATE &state)
+    {
+
+    }
 
 private:
 
-    bool checkEX1(STATE& state) {
+    bool checkEX1(STATE& state) 
+    {
         return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
             (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg1);
     }
 
-    bool checkEX2(STATE& state) {
+    bool checkEX2(STATE& state) 
+    {
         return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
             (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg2);
     }
 
 
-    bool checkMEM1(STATE& state) {
+    bool checkMEM1(STATE& state) 
+    {
         return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
             (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg1);
     }
 
-    bool checkMEM2(STATE& state) {
+    bool checkMEM2(STATE& state) 
+    {
         return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
             (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg2); 
     }
+};
+
+
+struct HAZARD_UNIT 
+{
+
+
+    private:
+
+
 };
 
 
