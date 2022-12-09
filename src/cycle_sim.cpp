@@ -124,63 +124,121 @@ struct DecodedInst{
 
 
 // Pipeline stages 
-struct IF_STAGE{
+
+struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
 };
 
-struct ID_STAGE{
+struct ID_EX_STAGE{
     DecodedInst decodedInst;
     uint32_t npc;
     uint32_t readReg1;
     uint32_t readReg2;
+    uint32_t regDest;
     uint32_t readData1;
     uint32_t readData2;
-};
 
-struct EX_STAGE{
+    bool regWrite;
+};    
+
+struct EX_MEM_STAGE{
     DecodedInst decodedInst;
     uint32_t npc; 
     uint32_t readData1;
     uint32_t readData2;
+    uint32_t regDest;
     uint32_t aluResult;
 
     // Control 
-    bool regDst;
+    bool regWrite;
     bool ALUOp1;
     bool ALUOp2;
     bool ALUSrc;
-};    
+};
 
-struct MEM_STAGE{
+struct MEM_WB_STAGE{
     DecodedInst decodedInst;
+    uint32_t regDest;
     uint32_t aluResult;
     uint32_t data; 
 
     // Control
+    bool regWrite;
     bool memRead;
     bool memWrite;
     bool branch;
 };
 
-struct WB_STAGE{
-    DecodedInst decodedInst;
-    uint32_t data;
 
-    // Control
-    bool regWrite;
-    bool memToReg;
+// HAZARD DETECTION AND FORWARDING
+
+enum class HAZARD_TYPE{
+    NONE, EX, MEM
 };
+
+
+
+struct FORWARD_UNIT 
+{
+    HAZARD_TYPE forward1;
+    HAZARD_TYPE forward2;
+
+    void checkHazardEX(STATE& state) {
+        if (checkEX1(state)) {
+            forward1 = HAZARD_TYPE::EX;
+        }
+        if (checkEX2(state)) {
+            forward2 = HAZARD_TYPE::EX;
+        }
+    }
+
+    void checkHazardMEM(STATE& state) {
+        if (checkMEM1(state) && !checkEX1(state)) {
+            forward1 = HAZARD_TYPE::MEM;
+        }
+        if (checkEX2(state) && !checkEX2(state)) {
+            forward2 = HAZARD_TYPE::MEM;
+        }
+    }
+
+
+private:
+
+    bool checkEX1(STATE& state) {
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.regDest != 0) &&
+            (state.ex_mem_stage.regDest == state.id_ex_stage.readReg1);
+    }
+
+    bool checkEX2(STATE& state) {
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.regDest != 0) &&
+            (state.ex_mem_stage.regDest == state.id_ex_stage.readReg2);
+    }
+
+
+    bool checkMEM1(STATE& state) {
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.regDest != 0) &&
+            (state.mem_wb_stage.regDest == state.id_ex_stage.readReg1);
+    }
+
+    bool checkMEM2(STATE& state) {
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.regDest != 0) &&
+            (state.mem_wb_stage.regDest == state.id_ex_stage.readReg2); 
+    }
+};
+
+
 
 struct STATE
 {
     uint32_t pc;
     uint32_t cycles;
-    IF_STAGE if_stage;
-    ID_STAGE id_stage;
-    EX_STAGE ex_stage;
-    MEM_STAGE mem_stage;
-    WB_STAGE wb_stage;
+    IF_ID_STAGE if_id_stage;
+    ID_EX_STAGE id_ex_stage;
+    EX_MEM_STAGE ex_mem_stage;
+    MEM_WB_STAGE mem_wb_stage;
+    // added by Amir
+    FORWARD_UNIT fwd;
 };
 
 
@@ -189,11 +247,11 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 {
     out << "State at beginning of cycle " << state.cycles << ":" << std::endl;
     out << "PC: " << std::hex << state.pc << std::endl;
-    out << "IF: " << std::hex << state.if_stage.instr << std::endl;
-    out << "ID: " << std::hex << state.id_stage.decodedInst.instr << std::endl;
-    out << "EX: " << std::hex << state.ex_stage.decodedInst.instr << std::endl;
-    out << "MEM: " << std::hex << state.mem_stage.decodedInst.instr << std::endl;
-    out << "WB: " << std::hex << state.wb_stage.decodedInst.instr << std::endl;
+    out << "IF/ID: " << std::hex << state.if_id_stage.instr << std::endl;
+    out << "ID/EX: " << std::hex << state.id_ex_stage.decodedInst.instr << std::endl;
+    out << "EX/MEM: " << std::hex << state.ex_mem_stage.decodedInst.instr << std::endl;
+    out << "MEM/WB: " << std::hex << state.mem_wb_stage.decodedInst.instr << std::endl;
+   // out << "WB: " << std::hex << state.wb_stage.decodedInst.instr << std::endl;
 
     if(printReg){
         out << "Registers:" << std::endl;
@@ -243,14 +301,14 @@ void decodeInst(uint32_t inst, DecodedInst & decodedInst){
 // *------------------------------------------------------------*
 
 // Updates control signals  for exec stage
-void execControl(State &state){
+void execControl(STATE& state){
     // Control Logic
-    switch(state.exec_stage.decodedInst.op){
+    switch(state.ex_mem_stage.decodedInst.op){
         case OP_RTYPE:
-            state.ex_stage.regDst = true;
-            state.ex_stage.ALUOp1 = true;
-            state.ex_stage.ALUOp2 = false;
-            state.ex_stage.ALUSrc = false;
+            state.ex_mem_stage.regDst = true;
+            state.ex_mem_stage.ALUOp1 = true;
+            state.ex_mem_stage.ALUOp2 = false;
+            state.ex_mem_stage.ALUSrc = false;
             break;
         //TODO more 
     }
@@ -272,15 +330,15 @@ void IF(STATE & state){
     // TODO ERROR HANDLING
     mem->getMemValue(state.pc, instr, WORD_SIZE);
     // Update state
-    state.if_stage.instr = instr;
-    state.if_stage.npc = state.pc + 4;
+    state.if_id_stage.instr = instr;
+    state.if_id_stage.npc = state.pc + 4;
 }
 
 
-void ID(STATE & state){
+void ID(STATE& state){
     
     // Read instruction from IF stage
-    uint32_t instr = state.if_stage.instr;
+    uint32_t instr = state.if_id_stage.instr;
     
     // Decode instruction
     DecodedInst decodedInst;
@@ -291,31 +349,31 @@ void ID(STATE & state){
     uint32_t readReg2 = regs[decodedInst.rt];
 
     // Update state
-    state.id_stage.decodedInst = decodedInst;
-    state.id_stage.npc = state.if_stage.npc;
-    state.id_stage.readReg1 = readReg1;
-    state.id_stage.readReg2 = readReg2;
-    state.id_stage.readData1 = readReg1;
-    state.id_stage.readData2 = readReg2;
+    state.id_ex_stage.decodedInst = decodedInst;
+    state.id_ex_stage.npc = state.if_id_stage.npc;
+    state.id_ex_stage.readReg1 = readReg1;
+    state.id_ex_stage.readReg2 = readReg2;
+    state.id_ex_stage.readData1 = readReg1;
+    state.id_ex_stage.readData2 = readReg2;
 }
 
 
 void EX(STATE & state){
-    state.ex_stage.decodedInst = state.id_stage.decodedInst;
-    state.ex_stage.npc = state.id_stage.npc;
-    state.ex_stage.readData2 = state.id_stage.readData2;
-
-    // Need todo ALU stuff + control 
+   // Need todo ALU stuff + control 
 
     // Do instruction specific stuff
     doLoad(state);
+
+    state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
+    state.ex_mem_stage.npc = state.id_ex_stage.npc;
+    state.ex_mem_stage.readData2 = state.id_ex_stage.readData2; 
 }
 
 
 void MEM(STATE & state){
-    state.mem_stage.decodedInst = state.ex_stage.decodedInst;
-    state.mem_stage.aluResult = state.ex_stage.aluResult;
-    state.mem_stage.data = state.ex_stage.aluResult;
+    state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
+    state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
+    state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
 
     // Do actual memory stuff
 
