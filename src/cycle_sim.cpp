@@ -378,6 +378,13 @@ void IF(STATE & state){
     // Update state
     state.if_id_stage.instr = instr;
     state.if_id_stage.npc = state.pc + 4;
+
+    // not really stored in if_id, but has to be extracted and delivered to hazard_unit via 5-bit buses
+    state.if_id_stage.readReg1 = regs[instructBits(instr, 25, 21)];
+    state.if_id_stage.readReg2 = regs[instructBits(instr, 20, 16)];
+
+    // increment pc
+    state.pc += 4;
 }
 
 
