@@ -181,7 +181,7 @@ struct FORWARD_UNIT; // do not delete or compilation error
 
 struct STATE
 {
-    uint32_t pc;
+    uint32_t pc, branch_pc;
     uint32_t cycles;
     IF_ID_STAGE if_id_stage;
     ID_EX_STAGE id_ex_stage;
@@ -189,6 +189,7 @@ struct STATE
     MEM_WB_STAGE mem_wb_stage;
     // added by Amir
     FORWARD_UNIT* fwd;  // do not change, it must be pointer
+    HAZARD_UNIT*  hzd;
     bool stall;
     bool delay;
 };
@@ -255,6 +256,7 @@ private:
 struct HAZARD_UNIT 
 {
     bool if_id_flush;
+    bool branch;
 
     void checkLoadUse(STATE& state) 
     {
@@ -363,10 +365,16 @@ void execControl(STATE& state){
 // Function for each stage
 // *------------------------------------------------------------*
 void IF(STATE & state){
-    // Read instruction from memory
     uint32_t instr = 0;
-    // TODO ERROR HANDLING
+
+    // mux. if control_hazard.branch asserted, then jump to new address
+    if (state.hzd -> branch) {
+        state.pc = state.branch_pc;
+    } 
+
+    // fetch instruction
     mem->getMemValue(state.pc, instr, WORD_SIZE);
+    
     // Update state
     state.if_id_stage.instr = instr;
     state.if_id_stage.npc = state.pc + 4;
