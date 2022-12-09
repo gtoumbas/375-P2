@@ -128,6 +128,7 @@ struct DecodedInst{
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
+    DecodedInst decodedInst;
 
     uint32_t readReg1;
     uint32_t readReg2;
@@ -145,6 +146,13 @@ struct ID_EX_STAGE{
     bool memRead;
     bool regDst;
     bool regWrite;
+    bool ALUOp1;
+    bool ALUOp2;
+    bool ALUSrc;
+    bool memWrite;
+    bool memRead;
+    bool branch;
+    bool memToReg;
 };    
 
 struct EX_MEM_STAGE{
@@ -324,27 +332,68 @@ void decodeInst(uint32_t inst, DecodedInst & decodedInst){
         decodedInst.addr = instructBits(inst, 25, 0) << 2;
 }
 // *------------------------------------------------------------*
-// Update Control Signal Helpers
+// Control 
 // *------------------------------------------------------------*
 
-// Updates control signals  for exec stage
-void execControl(STATE& state){
-    // Control Logic
-    switch(state.ex_mem_stage.decodedInst.op){
-        case OP_RTYPE:
-            state.ex_mem_stage.regDst = true; // i deleted this field, need to rename regDst
-            state.ex_mem_stage.ALUOp1 = true;
-            state.ex_mem_stage.ALUOp2 = false;
-            state.ex_mem_stage.ALUSrc = false;
-            break;
-        //TODO more 
-    }
+void updateControl(STATE & state){
+    // Get instruction from IF_ID stage
+    DecodedInst decIns = state.if_id_stage.decodedInst;
+    // Switch statement on op type
+    switch(decIns.op){
+        case OP_ZERO: // R type
+            state.id_ex_stage.regDst = true;
+            state.id_ex_stage.ALUOp1 = true;
+            state.id_ex_stage.ALUOp2 = false;
+            state.id_ex_stage.ALUSrc = false;
+            state.id_ex_stage.branch = false;
+            state.id_ex_stage.memRead = false;
+            state.id_ex_stage.memWrite = false;
+            state.id_ex_stage.regWrite = true;
+            state.id_ex_stage.memToReg = false;
+        case OP_LW: 
+            state.id_ex_stage.regDst = false;
+            state.id_ex_stage.ALUOp1 = false;
+            state.id_ex_stage.ALUOp2 = false;
+            state.id_ex_stage.ALUSrc = true;
+            state.id_ex_stage.branch = false;
+            state.id_ex_stage.memRead = true;
+            state.id_ex_stage.memWrite = false;
+            state.id_ex_stage.regWrite = true;
+            state.id_ex_stage.memToReg = true;
+        case OP_SW:
+            state.id_ex_stage.regDst = false;
+            state.id_ex_stage.ALUOp1 = false;
+            state.id_ex_stage.ALUOp2 = false;
+            state.id_ex_stage.ALUSrc = true;
+            state.id_ex_stage.branch = false;
+            state.id_ex_stage.memRead = false;
+            state.id_ex_stage.memWrite = true;
+            state.id_ex_stage.regWrite = false;
+            state.id_ex_stage.memToReg = false; 
+        case OP_BEQ:
+            state.id_ex_stage.regDst = false;
+            state.id_ex_stage.ALUOp1 = false;
+            state.id_ex_stage.ALUOp2 = true;
+            state.id_ex_stage.ALUSrc = false;
+            state.id_ex_stage.branch = true;
+            state.id_ex_stage.memRead = false;
+            state.id_ex_stage.memWrite = false;
+            state.id_ex_stage.regWrite = false;
+            state.id_ex_stage.memToReg = false;
+        default:
+            state.id_ex_stage.regDst = false;
+            state.id_ex_stage.ALUOp1 = false;
+            state.id_ex_stage.ALUOp2 = false;
+            state.id_ex_stage.ALUSrc = false;
+            state.id_ex_stage.branch = false;
+            state.id_ex_stage.memRead = false;
+            state.id_ex_stage.memWrite = false;
+            state.id_ex_stage.regWrite = false;
+            state.id_ex_stage.memToReg = false;
 }
 
-// Instruction Execution Helpers TODO
 // *------------------------------------------------------------*
-
-
+// Instruction Execution Helpers TODO
 // *------------------------------------------------------------*
 
 
@@ -389,7 +438,6 @@ void EX(STATE & state){
    // Need todo ALU stuff + control 
 
     // Do instruction specific stuff
-    doLoad(state);
 
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
