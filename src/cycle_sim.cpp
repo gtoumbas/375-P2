@@ -380,6 +380,7 @@ void MEM(STATE & state){
 
 
 void WB(STATE & state){
+    // do not have to store anything after WB
 
     // Do actual write back stuff
 }
