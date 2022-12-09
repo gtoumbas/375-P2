@@ -254,6 +254,8 @@ private:
 
 struct HAZARD_UNIT 
 {
+    bool if_id_flush;
+
     void checkLoadUse(STATE& state) 
     {
         if (state.id_ex_stage.memRead && ((state.id_ex_stage.regDst == state.if_id_stage.readReg1) ||
@@ -269,8 +271,10 @@ struct HAZARD_UNIT
     {
         if (/*is_branch &&*/ (state.id_ex_stage.readData1 == state.id_ex_stage.readData2)) {
             state.delay = true;
+            if_id_flush = true;
         } else {
             state.delay = false;
+            if_id_flush = false;
         }
     }
 };
