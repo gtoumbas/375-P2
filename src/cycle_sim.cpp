@@ -128,9 +128,6 @@ struct DecodedInst{
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
-
-    uint32_t readReg1;
-    uint32_t readReg2;
 };
 
 struct ID_EX_STAGE{
@@ -177,8 +174,45 @@ struct MEM_WB_STAGE{
     bool branch;
 };
 
-struct FORWARD_UNIT; // do not delete or compilation error
+// Instruction Helpers (Decoding)
+// *------------------------------------------------------------*
+// extract specific bits [start, end] from an instruction
+uint instructBits(uint32_t instruct, int start, int end)
+{
+    int run = start - end + 1;
+    uint32_t mask = (1 << run) - 1;
+    uint32_t clipped = instruct >> end;
+    return clipped & mask;
+}
 
+// sign extend while keeping values as uint's
+uint32_t signExt(uint16_t smol)
+{
+    uint32_t x = smol;
+    uint32_t extension = 0xffff0000;
+    return (smol & 0x8000) ? x ^ extension : x;
+}
+
+// Function to decode instruction
+void decodeInst(uint32_t inst, DecodedInst & decodedInst){
+        decodedInst.instr = inst;
+        decodedInst.op = instructBits(inst, 31, 26);
+        decodedInst.rs = instructBits(inst, 25, 21);
+        decodedInst.rt = instructBits(inst, 20, 16);
+        decodedInst.rd = instructBits(inst, 15, 11);
+        decodedInst.shamt = instructBits(inst, 10, 6);
+        decodedInst.funct = instructBits(inst, 5, 0);
+        decodedInst.imm = instructBits(inst, 15, 0);
+        decodedInst.signExtIm = signExt(decodedInst.imm);
+        decodedInst.zeroExtImm = decodedInst.imm;
+        decodedInst.addr = instructBits(inst, 25, 0) << 2;
+}
+
+
+// HAZARD + FORWARD UNITS AND STATE
+// *------------------------------------------------------------*
+struct FORWARD_UNIT; // do not delete or compilation error
+struct HAZARD_UNIT;  // do not delete or compilation error
 struct STATE
 {
     uint32_t pc, branch_pc;
@@ -228,27 +262,27 @@ private:
 
     bool checkEX1(STATE& state) 
     {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
-            (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg1);
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
+            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
     }
 
     bool checkEX2(STATE& state) 
     {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.writeReg != 0) &&
-            (state.ex_mem_stage.writeReg == state.id_ex_stage.readReg2);
+        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
+            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt);
     }
 
 
     bool checkMEM1(STATE& state) 
     {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
-            (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg1);
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
+            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
     }
 
     bool checkMEM2(STATE& state) 
     {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.writeReg != 0) &&
-            (state.mem_wb_stage.writeReg == state.id_ex_stage.readReg2); 
+        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
+            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt); 
     }
 };
 
@@ -260,8 +294,10 @@ struct HAZARD_UNIT
 
     void checkLoadUse(STATE& state) 
     {
-        if (state.id_ex_stage.memRead && ((state.id_ex_stage.regDst == state.if_id_stage.readReg1) ||
-            (state.id_ex_stage.regDst == state.if_id_stage.readReg2))) {
+        uint32_t if_id_reg1 = instructBits(state.if_id_stage.instr, 25, 21);
+        uint32_t if_id_reg2 = instructBits(state.if_id_stage.instr, 20, 16);
+        if (state.id_ex_stage.memRead && ((state.id_ex_stage.decodedInst.rt == if_id_reg1) ||
+            (state.id_ex_stage.decodedInst.rt == if_id_reg2))) {
                 state.stall = true;
         } else {
             state.stall = false;
@@ -303,39 +339,7 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 }
 
 
-// Instruction Helpers (Decoding)
-// *------------------------------------------------------------*
-// extract specific bits [start, end] from an instruction
-uint instructBits(uint32_t instruct, int start, int end)
-{
-    int run = start - end + 1;
-    uint32_t mask = (1 << run) - 1;
-    uint32_t clipped = instruct >> end;
-    return clipped & mask;
-}
 
-// sign extend while keeping values as uint's
-uint32_t signExt(uint16_t smol)
-{
-    uint32_t x = smol;
-    uint32_t extension = 0xffff0000;
-    return (smol & 0x8000) ? x ^ extension : x;
-}
-
-// Function to decode instruction
-void decodeInst(uint32_t inst, DecodedInst & decodedInst){
-        decodedInst.instr = inst;
-        decodedInst.op = instructBits(inst, 31, 26);
-        decodedInst.rs = instructBits(inst, 25, 21);
-        decodedInst.rt = instructBits(inst, 20, 16);
-        decodedInst.rd = instructBits(inst, 15, 11);
-        decodedInst.shamt = instructBits(inst, 10, 6);
-        decodedInst.funct = instructBits(inst, 5, 0);
-        decodedInst.imm = instructBits(inst, 15, 0);
-        decodedInst.signExtIm = signExt(decodedInst.imm);
-        decodedInst.zeroExtImm = decodedInst.imm;
-        decodedInst.addr = instructBits(inst, 25, 0) << 2;
-}
 // *------------------------------------------------------------*
 // Update Control Signal Helpers
 // *------------------------------------------------------------*
@@ -379,10 +383,6 @@ void IF(STATE & state){
     state.if_id_stage.instr = instr;
     state.if_id_stage.npc = state.pc + 4;
 
-    // not really stored in if_id, but has to be extracted and delivered to hazard_unit via 5-bit buses
-    state.if_id_stage.readReg1 = regs[instructBits(instr, 25, 21)];
-    state.if_id_stage.readReg2 = regs[instructBits(instr, 20, 16)];
-
     // increment pc
     state.pc += 4;
 }
@@ -397,7 +397,7 @@ void ID(STATE& state){
     DecodedInst decodedInst;
     decodeInst(instr, decodedInst);
 
-    // Read registers
+    // Read registers:
     uint32_t readReg1 = regs[decodedInst.rs];
     uint32_t readReg2 = regs[decodedInst.rt];
 
