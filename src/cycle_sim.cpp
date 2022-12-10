@@ -135,16 +135,11 @@ struct DecodedInst{
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
-
-    uint32_t readReg1;
-    uint32_t readReg2;
 };
 
 struct ID_EX_STAGE{
     DecodedInst decodedInst;
     uint32_t npc;
-    uint32_t readReg1;
-    uint32_t readReg2;
     uint32_t writeReg;
     uint32_t readData1;
     uint32_t readData2;
@@ -164,8 +159,7 @@ struct ID_EX_STAGE{
 struct EX_MEM_STAGE{
     DecodedInst decodedInst;
     uint32_t npc; 
-    uint32_t readData1;
-    uint32_t readData2;
+    uint32_t memoryAddr; // for Load and Store -- the value of second register in the prev stage. == readData2
     uint32_t writeReg;
     uint32_t aluResult;
 
@@ -230,6 +224,7 @@ void decodeInst(uint32_t inst, DecodedInst & decodedInst){
 // *------------------------------------------------------------*
 struct FORWARD_UNIT; // do not delete or compilation error
 struct HAZARD_UNIT;  // do not delete or compilation error
+struct EXECUTOR;  // do not delete or compilation error
 struct STATE
 {
     uint32_t pc, branch_pc;
@@ -337,6 +332,22 @@ struct HAZARD_UNIT
     }
 };
 
+struct EXECUTOR 
+{
+    void executeR(STATE& state) {
+
+    }
+
+    void executeI(STATE& state) {
+        
+    }
+
+    void executeJ(STATE& state) {
+
+    }
+
+};
+
 
 // Print State
 void printState(STATE & state, std::ostream & out, bool printReg)
@@ -377,6 +388,7 @@ void updateControl(STATE & state, DecodedInst & decIns){
             state.id_ex_stage.memWrite = false;
             state.id_ex_stage.regWrite = true;
             state.id_ex_stage.memToReg = false;
+            break;
         case OP_LW: 
             state.id_ex_stage.regDst = false;
             state.id_ex_stage.ALUOp1 = false;
@@ -387,6 +399,7 @@ void updateControl(STATE & state, DecodedInst & decIns){
             state.id_ex_stage.memWrite = false;
             state.id_ex_stage.regWrite = true;
             state.id_ex_stage.memToReg = true;
+            break;
         case OP_SW:
             state.id_ex_stage.regDst = false;
             state.id_ex_stage.ALUOp1 = false;
@@ -397,6 +410,7 @@ void updateControl(STATE & state, DecodedInst & decIns){
             state.id_ex_stage.memWrite = true;
             state.id_ex_stage.regWrite = false;
             state.id_ex_stage.memToReg = false; 
+            break;
         case OP_BEQ:
             state.id_ex_stage.regDst = false;
             state.id_ex_stage.ALUOp1 = false;
@@ -407,6 +421,7 @@ void updateControl(STATE & state, DecodedInst & decIns){
             state.id_ex_stage.memWrite = false;
             state.id_ex_stage.regWrite = false;
             state.id_ex_stage.memToReg = false;
+            break;
         default:
             state.id_ex_stage.regDst = false;
             state.id_ex_stage.ALUOp1 = false;
@@ -417,6 +432,7 @@ void updateControl(STATE & state, DecodedInst & decIns){
             state.id_ex_stage.memWrite = false;
             state.id_ex_stage.regWrite = false;
             state.id_ex_stage.memToReg = false;
+    }
 }
 
 // *------------------------------------------------------------*
@@ -468,8 +484,6 @@ void ID(STATE& state){
     // Update state
     state.id_ex_stage.decodedInst = decodedInst;
     state.id_ex_stage.npc = state.if_id_stage.npc;
-    state.id_ex_stage.readReg1 = readReg1;
-    state.id_ex_stage.readReg2 = readReg2;
     state.id_ex_stage.readData1 = readReg1;
     state.id_ex_stage.readData2 = readReg2;
 
@@ -519,7 +533,7 @@ void EX(STATE & state)
     // Do instruction specific stuff
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
-    state.ex_mem_stage.readData2 = state.id_ex_stage.readData2; 
+    state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2; 
 }
 
 
