@@ -144,7 +144,6 @@ struct ID_EX_STAGE{
     uint32_t readData1;
     uint32_t readData2;
 
-    bool memRead;
     bool regDst;
     bool regWrite;
     bool ALUOp1;
@@ -236,6 +235,7 @@ struct STATE
     // added by Amir
     FORWARD_UNIT* fwd;  // do not change, it must be pointer
     HAZARD_UNIT*  hzd;
+    EXECUTOR* exec;
     bool stall;
     bool delay;
 };
@@ -301,8 +301,7 @@ private:
 
 struct HAZARD_UNIT 
 {
-    bool if_id_flush;
-    bool branch;
+    bool jump;
 
     void checkLoadUse(STATE& state) 
     {
@@ -321,29 +320,40 @@ struct HAZARD_UNIT
     {
         uint32_t readReg1 = regs[decodedInst.rs];
         uint32_t readReg2 = regs[decodedInst.rt];
+        uint32_t old_pc = state.if_id_stage.npc;
+        uint32_t op = decodedInst.op;
         // done in the ID stage
-        if (/*is_branch &&*/ (readReg1 == readReg2)) {
-            branch = true;
-            if_id_flush = true;
-        } else {
-            branch = false;
-            if_id_flush = false;
+        switch (op) {
+            case OP_BEQ:
+                jump = (readReg1 == readReg2);
+                state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
+                return;
+            case OP_BNE:
+                jump = (readReg1 != readReg2);
+                state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
+                return;
+            case OP_JAL:
+                regs[REG_RA] = old_pc + 4; // not +8 because incremented PC is incremented in the IF()
+                // fall through
+            case OP_J:
+                jump = true;
+                state.branch_pc = (old_pc & 0xf0000000) | (decodedInst.addr << 2); 
+                return;
         }
     }
 };
 
 struct EXECUTOR 
 {
-    void executeR(STATE& state) {
+    void executeR(STATE& state, uint32_t arg1, uint32_t args) {
 
     }
 
-    void executeI(STATE& state) {
-        
+    void executeI(STATE& state, uint32_t arg1, uint32_t args) {
+
     }
 
-    void executeJ(STATE& state) {
-
+    void executeJ(STATE& state, uint32_t arg1, uint32_t args) {
     }
 
 };
@@ -447,10 +457,9 @@ void IF(STATE & state){
     uint32_t instr = 0;
 
     // mux. if control_hazard.branch asserted, then jump to new address
-    if (state.hzd -> branch) {
+    if (state.hzd -> jump) {
         state.pc = state.branch_pc;
     } 
-
 
     // fetch instruction
     mem->getMemValue(state.pc, instr, WORD_SIZE);
@@ -472,14 +481,21 @@ void ID(STATE& state){
     decodeInst(instr, decodedInst);
     uint32_t readReg1 = regs[decodedInst.rs];
     uint32_t readReg2 = regs[decodedInst.rt];
+    state.hzd -> jump = false;
 
     // to do: 
     // 1) Sign extending immediate and slt << 2 (jump)
     // branch_addr = (signExtImm << 2)
     // 2) Branch ALU + readReg comparison
 
-    state.branch_pc = decodedInst.signExtIm << 2;
-    state.hzd -> checkBranch(state, decodedInst); // sets up hzd.IF_ID_FLUSH, state.delay
+
+    // if branch -> calculate address and check condition
+    if (decodedInst.op == OP_BEQ || decodedInst.op == OP_BNE) {
+        state.branch_pc = ((state.pc + 4) & 0xf0000000) | (decodedInst.signExtIm << 2);
+        state.hzd -> checkBranch(state, decodedInst); // sets up hzd.IF_ID_FLUSH, state.delay
+    } else if (decodedInst.op == OP_J || decodedInst.op == OP_JAL) {
+
+    }
 
     // Update state
     state.id_ex_stage.decodedInst = decodedInst;
@@ -487,8 +503,8 @@ void ID(STATE& state){
     state.id_ex_stage.readData1 = readReg1;
     state.id_ex_stage.readData2 = readReg2;
 
-    // 3) flush if/id if needed ---- equivalent to NOP
-    if (state.hzd -> if_id_flush) {
+    // 3) flush if/id if Branch taken or Jump ---- equivalent to NOP
+    if (state.hzd -> jump) {
         state.if_id_stage.instr = 0;
         state.if_id_stage.npc = 0;
     }
