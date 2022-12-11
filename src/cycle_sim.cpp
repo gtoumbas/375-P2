@@ -671,27 +671,23 @@ void ID(STATE& state){
     uint32_t instr = state.if_id_stage.instr;
     DecodedInst decodedInst;
     decodeInst(instr, decodedInst);
-    uint32_t readReg1 = regs[decodedInst.rs];
-    uint32_t readReg2 = regs[decodedInst.rt];
     state.hzd -> jump = false;  // erase previously written value 
-
-    // to do: 
-    // 1) Sign extending immediate and slt << 2 (jump)
-    // branch_addr = (signExtImm << 2)
-    // 2) Branch ALU + readReg comparison
-
 
     // if branch -> calculate address and check condition
     // if load_use hazard -> stall
     state.hzd -> checkHazard(state, decodedInst);
 
-    // Update state
+    uint32_t op = decodedInst.op;
+    if(op == OP_BNE || op == OP_BEQ || op == OP_J || op == OP_JAL){ // set inst to zero, because branch or jump is completed
+        decodeInst(0, decodedInst);
+    }
+
+    // update inst 
     state.id_ex_stage.decodedInst = decodedInst;
     state.id_ex_stage.npc = state.if_id_stage.npc;
-    state.id_ex_stage.readData1 = readReg1;
-    state.id_ex_stage.readData2 = readReg2;
-
-    
+    state.id_ex_stage.readData1 = regs[decodedInst.rs];
+    state.id_ex_stage.readData2 = regs[decodedInst.rt];
+ 
     // FLUSH IF_ID IF STALL
     if (state.stall) {
         state.if_id_stage.instr = 0;
@@ -702,7 +698,6 @@ void ID(STATE& state){
 
 void EX(STATE & state)
 {
-    // need to do forwarding
     state.fwd->checkFwd(state);
     uint32_t readData1, readData2; 
     EXECUTOR executor;
