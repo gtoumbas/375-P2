@@ -390,52 +390,56 @@ struct EXECUTOR
         uint32_t funct = state.id_ex_stage.decodedInst.funct;
         uint32_t rd = state.id_ex_stage.decodedInst.rd; // register number
         uint32_t rs = state.id_ex_stage.decodedInst.rs; // register number
-        uint32_t rt = state.id_ex_stage.decodedInst.rt;
+        uint32_t rt = state.id_ex_stage.decodedInst.rt; // register number
+
+        uint32_t rs_value = state.id_ex_stage.readData1;    // Amir
+        uint32_t rt_value = state.id_ex_stage.readData2;    // Amir
+
         uint32_t shamt = state.id_ex_stage.decodedInst.shamt;
         // Perform ALU operation and store in EX/MEM aluResult
         uint32_t aluResult;
         int ret = 0;
         switch (funct){
             case FUN_ADD:
-                ret = doAddSub(aluResult, rs, rt, true, true);
+                ret = doAddSub(aluResult, rs_value, rt_value, true, true);
                 break;
             case FUN_ADDU:
-                ret = doAddSub(aluResult, rs, rt, true, false);
+                ret = doAddSub(aluResult, rs_value, rt_value, true, false);
                 break;
             case FUN_AND:
-                aluResult = rs & rt;
+                aluResult = rs_value & rt_value;
                 break;
             case FUN_JR:
                 //FIXME Should we be updating the PC here?
-                state.ex_mem_stage.npc = rs;
+                state.ex_mem_stage.npc = rs_value;
                 break;
             case FUN_NOR:
-                aluResult = ~(rs | rt);
+                aluResult = ~(rs_value | rt_value);
                 break;
             case FUN_OR:
-                aluResult = rs | rt;
+                aluResult = rs_value | rt_value;
                 break;
             case FUN_SLT:
-                if (rs >> 31 != rt >> 31) { // Different signs
-                    aluResult = (rs >> 31) ? 1 : 0; 
+                if ((rs_value >> 31) != (rt_value >> 31)) { // Different signs
+                    aluResult = (rs_value >> 31) ? 1 : 0; 
                 } else {
-                    aluResult = (rs < rt) ? 1 : 0;
+                    aluResult = (rs_value < rt_value) ? 1 : 0;
                 }
                 break;
             case FUN_SLTU:
-                aluResult = (rs < rt) ? 1 : 0;
+                aluResult = (rs_value < rt_value) ? 1 : 0;
                 break;
             case FUN_SLL:
-                aluResult = rt << shamt;
+                aluResult = rt_value << shamt;
                 break;
             case FUN_SRL:
-                aluResult = rt >> shamt;
+                aluResult = rt_value >> shamt;
                 break;
             case FUN_SUB:
-                ret = doAddSub(aluResult, rs, rt, false, true);
+                ret = doAddSub(aluResult, rs_value, rt_value, false, true);
                 break;
             case FUN_SUBU:
-                ret = doAddSub(aluResult, rs, rt, false, false);
+                ret = doAddSub(aluResult, rs_value, rt_value, false, false);
                 break;
             default:
                 // TODO jump to exception address=
