@@ -474,16 +474,16 @@ struct EXECUTOR
             case OP_ANDI:
                 aluResult = rs & zeImm;
                 break;
-         /*   case OP_BEQ:
-                if (rs == rt){
+            case OP_BEQ:
+                /*if (rs == rt){
                     state.ex_mem_stage.npc = 4 + (seImm << 2);
-                }
+                }*/
                 break;
             case OP_BNE:
-                if (rs != rt){
+                /*if (rs != rt){
                     state.ex_mem_stage.npc = 4 + (seImm << 2);
-                }
-                break; */
+                }*/
+                break;
             case OP_LBU:
                 aluResult = addr;
                 break;
@@ -727,10 +727,12 @@ void EX(STATE & state)
             executor.executeR(state);
             break;
         case OP_J:
-            executor.executeJ(state);
             break;
         case OP_JAL:
-            executor.executeJ(state);
+            break;
+        case OP_BEQ:    // branch done in the ID
+            break;
+        case OP_BNE:    // branch done in the ID
             break;
         default: //I type
             executor.executeI(state);
