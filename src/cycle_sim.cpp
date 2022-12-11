@@ -388,8 +388,8 @@ struct EXECUTOR
         // Do I need to do anything with control signals here?
         
         uint32_t funct = state.id_ex_stage.decodedInst.funct;
-        uint32_t rd = state.id_ex_stage.decodedInst.rd;
-        uint32_t rs = state.id_ex_stage.decodedInst.rs;
+        uint32_t rd = state.id_ex_stage.decodedInst.rd; // register number
+        uint32_t rs = state.id_ex_stage.decodedInst.rs; // register number
         uint32_t rt = state.id_ex_stage.decodedInst.rt;
         uint32_t shamt = state.id_ex_stage.decodedInst.shamt;
         // Perform ALU operation and store in EX/MEM aluResult
@@ -721,8 +721,12 @@ void EX(STATE & state)
             readData2 = state.id_ex_stage.readData2;
     }
 
+    // OVERWRITE REGISTER VALUES IF VALUES FORWARDED (different from what actually happens)
+    state.id_ex_stage.readData1 = readData1;
+    state.id_ex_stage.readData2 = readData2;
+
     // DO ALU Operations
-    switch(state.ex_mem_stage.decodedInst.op){
+    switch(state.id_ex_stage.decodedInst.op){
         case OP_ZERO: //R tytpe 
             executor.executeR(state);
             break;
