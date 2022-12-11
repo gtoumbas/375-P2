@@ -140,7 +140,6 @@ struct IF_ID_STAGE{
 struct ID_EX_STAGE{
     DecodedInst decodedInst;
     uint32_t npc;
-    uint32_t writeReg;
     uint32_t readData1;
     uint32_t readData2;
 
@@ -159,7 +158,6 @@ struct EX_MEM_STAGE{
     DecodedInst decodedInst;
     uint32_t npc; 
     uint32_t memoryAddr; // for Load and Store -- the value of second register in the prev stage. == readData2
-    uint32_t writeReg;
     uint32_t aluResult;
 
     // Control 
@@ -172,7 +170,6 @@ struct EX_MEM_STAGE{
 
 struct MEM_WB_STAGE{
     DecodedInst decodedInst;
-    uint32_t writeReg;
     uint32_t aluResult;
     uint32_t data; 
 
@@ -303,6 +300,17 @@ struct HAZARD_UNIT
 {
     bool jump;
 
+    void checkHazard(STATE& state, DecodedInst& decodedInst) {
+        state.stall = false;
+        if (state.id_ex_stage.memRead) {    // check load_use if op = MemRead
+            checkLoadUse(state);
+        } else {                // check jump or branch: op = J, JAL, BEQ, BNE
+            checkBranch(state, decodedInst);
+        }
+    }
+
+
+private:
     void checkLoadUse(STATE& state) 
     {
         uint32_t if_id_reg1 = instructBits(state.if_id_stage.instr, 25, 21);
@@ -665,7 +673,7 @@ void ID(STATE& state){
     decodeInst(instr, decodedInst);
     uint32_t readReg1 = regs[decodedInst.rs];
     uint32_t readReg2 = regs[decodedInst.rt];
-    state.hzd -> jump = false;
+    state.hzd -> jump = false;  // erase previously written value 
 
     // to do: 
     // 1) Sign extending immediate and slt << 2 (jump)
@@ -674,12 +682,8 @@ void ID(STATE& state){
 
 
     // if branch -> calculate address and check condition
-    if (decodedInst.op == OP_BEQ || decodedInst.op == OP_BNE) {
-        state.branch_pc = ((state.pc + 4) & 0xf0000000) | (decodedInst.signExtIm << 2);
-        state.hzd -> checkBranch(state, decodedInst); // sets up hzd.IF_ID_FLUSH, state.delay
-    } else if (decodedInst.op == OP_J || decodedInst.op == OP_JAL) {
-
-    }
+    // if load_use hazard -> stall
+    state.hzd -> checkHazard(state, decodedInst);
 
     // Update state
     state.id_ex_stage.decodedInst = decodedInst;
@@ -687,8 +691,9 @@ void ID(STATE& state){
     state.id_ex_stage.readData1 = readReg1;
     state.id_ex_stage.readData2 = readReg2;
 
-    // 3) flush if/id if Branch taken or Jump ---- equivalent to NOP
-    if (state.hzd -> jump) {
+    
+    // FLUSH IF_ID IF STALL
+    if (state.stall) {
         state.if_id_stage.instr = 0;
         state.if_id_stage.npc = 0;
     }
@@ -746,16 +751,16 @@ void EX(STATE & state)
             break;
         case OP_BNE:    // branch done in the ID
             break;
-        default: //I type
+        default: //I type not BNE and BEQ
             executor.executeI(state);
             break;
     }
 
 
-    // Do instruction specific stuff
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2; 
+    // wrote to state.ex_mem.aluResult in execute(), do not do it here
 }
 
 
@@ -847,6 +852,7 @@ int main(int argc, char *argv[])
         MEM(state);
         EX(state);
         ID(state);
+        // check state.stall. Don't fetch or increment PC if state.stall = true, add nop
         IF(state);
         // Update state
         state.pc = state.if_stage.npc; //Not right
