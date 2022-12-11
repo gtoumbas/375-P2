@@ -345,15 +345,192 @@ struct HAZARD_UNIT
 
 struct EXECUTOR 
 {
-    void executeR(STATE& state, uint32_t arg1, uint32_t args) {
-
+    uint8_t getSign(uint32_t value)
+    {
+        return (value >> 31) & 0x1;
     }
 
-    void executeI(STATE& state, uint32_t arg1, uint32_t args) {
+    int doAddSub(uint32_t& aluResult, uint32_t s1, uint32_t s2, bool isAdd, bool checkOverflow)
+    {
+        bool overflow = false;
+        uint32_t result = 0;
 
+        // Not sure why she was casting this before
+        if (isAdd){result = s1 + s2;}
+        else{result = s1 - s2;}
+
+        if (checkOverflow)
+        {
+                if (isAdd)
+                {
+                    overflow = getSign(s1) == getSign(s2) && getSign(s2) != getSign(result);
+                }
+                else
+                {
+                    overflow = getSign(s1) != getSign(s2) && getSign(s2) == getSign(result);
+                }
+        }
+
+        if (overflow)
+        {
+                // Inform the caller that overflow occurred so it can take appropriate action.
+                return OVERFLOW;
+        }
+
+        // Otherwise update state and return success.
+        aluResult = result;
+
+        return 0;
     }
 
-    void executeJ(STATE& state, uint32_t arg1, uint32_t args) {
+    void executeR(STATE& state){
+
+        // Do I need to do anything with control signals here?
+        
+        uint32_t funct = state.id_ex_stage.decodedInst.funct;
+        uint32_t rd = state.id_ex_stage.decodedInst.rd;
+        uint32_t rs = state.id_ex_stage.decodedInst.rs;
+        uint32_t rt = state.id_ex_stage.decodedInst.rt;
+        uint32_t shamt = state.id_ex_stage.decodedInst.shamt;
+        // Perform ALU operation and store in EX/MEM aluResult
+        uint32_t aluResult;
+        int ret = 0;
+        switch (funct){
+            case FUN_ADD:
+                ret = doAddSub(aluResult, rs, rt, true, true);
+                break;
+            case FUN_ADDU:
+                ret = doAddSub(aluResult, rs, rt, true, false);
+                break;
+            case FUN_AND:
+                aluResult = rs & rt;
+                break;
+            case FUN_JR:
+                //FIXME Should we be updating the PC here?
+                state.ex_mem_stage.npc = rs;
+                break;
+            case FUN_NOR:
+                aluResult = ~(rs | rt);
+                break;
+            case FUN_OR:
+                aluResult = rs | rt;
+                break;
+            case FUN_SLT:
+                if (rs >> 31 != rt >> 31) { // Different signs
+                    aluResult = (rs >> 31) ? 1 : 0; 
+                } else {
+                    aluResult = (rs < rt) ? 1 : 0;
+                }
+                break;
+            case FUN_SLTU:
+                aluResult = (rs < rt) ? 1 : 0;
+                break;
+            case FUN_SLL:
+                aluResult = rt << shamt;
+                break;
+            case FUN_SRL:
+                aluResult = rt >> shamt;
+                break;
+            case FUN_SUB:
+                ret = doAddSub(aluResult, rs, rt, false, true);
+                break;
+            case FUN_SUBU:
+                ret = doAddSub(aluResult, rs, rt, false, false);
+                break;
+            default:
+                // TODO jump to exception address=
+                std::cerr << "Invalid funct" << std::endl;
+                exit(1);
+        }
+        if (ret == OVERFLOW) {
+            // TODO jump to exception address
+            std::cerr << "Overflow" << std::endl;
+            exit(1);
+        }
+        
+        state.ex_mem_stage.aluResult = aluResult;
+    }
+
+    void executeI(STATE& state) {
+        uint32_t op = state.id_ex_stage.decodedInst.op;
+        uint32_t rt = state.id_ex_stage.decodedInst.rt;
+        uint32_t rs = state.id_ex_stage.decodedInst.rs;
+        uint32_t imm = state.id_ex_stage.decodedInst.imm;
+        uint32_t seImm = state.id_ex_stage.decodedInst.signExtIm;
+        uint32_t zeImm = imm;
+        uint32_t aluResult;
+        uint32_t addr = rs + seImm;
+
+        int ret = 0;
+        uint32_t oldPC = state.id_ex_stage.npc;
+
+        switch(op){
+            case OP_ADDI:
+                ret = doAddSub(aluResult, rs, seImm, true, true);
+                break;
+            case OP_ADDIU:
+                ret = doAddSub(aluResult, rs, seImm, true, false);
+                break;
+            case OP_ANDI:
+                aluResult = rs & zeImm;
+                break;
+            case OP_BEQ:
+                if (rs == rt){
+                    state.ex_mem_stage.npc = 4 + (seImm << 2);
+                }
+                break;
+            case OP_BNE:
+                if (rs != rt){
+                    state.ex_mem_stage.npc = 4 + (seImm << 2);
+                }
+                break;
+            case OP_LBU:
+                aluResult = addr;
+                break;
+            case OP_LHU:
+                // Double check
+                aluResult = addr;
+                break;
+            case OP_LUI:
+                aluResult = imm << 16;
+                break;
+            case OP_LW:
+                aluResult = addr;
+                break;
+            case OP_ORI:
+                aluResult = rs | zeImm;
+                break;
+            case OP_SLTI:
+                if (rs >> 31 != seImm >> 31) { // Different signs
+                    aluResult = (rs >> 31) ? 1 : 0; 
+                } else {
+                    aluResult = (rs < seImm) ? 1 : 0;
+                }
+                break;
+            case OP_SLTIU:
+                aluResult = (rs < seImm) ? 1 : 0;
+                break;
+            // TODO Rest of store instructions
+            case OP_SB:
+                aluResult = addr;
+                break;
+            
+            default:
+                // TODO jump to exception address
+                std::cerr << "Invalid op" << std::endl;
+                exit(1);
+        }
+
+        if (ret == OVERFLOW) {
+            // TODO jump to exception address
+            std::cerr << "Overflow" << std::endl;
+            exit(1);
+        }
+
+        state.ex_mem_stage.aluResult = aluResult;
+    }
+
+    void executeJ(STATE& state){
     }
 
 };
@@ -378,7 +555,6 @@ void printState(STATE & state, std::ostream & out, bool printReg)
     }
     out << std::endl;
 }
-
 
 
 // *------------------------------------------------------------*
@@ -516,6 +692,7 @@ void EX(STATE & state)
     // need to do forwarding
     state.fwd->checkFwd(state);
     uint32_t readData1, readData2; 
+    EXECUTOR executor;
 
     // set readReg1
     switch (state.fwd -> forward1) {
@@ -544,7 +721,22 @@ void EX(STATE & state)
             readData2 = state.id_ex_stage.readData2;
     }
 
-    executeInstruction();
+    // DO ALU Operations
+    switch(state.ex_mem_stage.decodedInst.op){
+        case OP_ZERO: //R tytpe 
+            executor.executeR(state);
+            break;
+        case OP_J:
+            executor.executeJ(state);
+            break;
+        case OP_JAL:
+            executor.executeJ(state);
+            break;
+        default: //I type
+            executor.executeI(state);
+            break;
+    }
+
 
     // Do instruction specific stuff
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
