@@ -333,7 +333,7 @@ struct HAZARD_UNIT
                 state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
                 return;
             case OP_JAL:
-                regs[REG_RA] = old_pc + 4; // not +8 because incremented PC is incremented in the IF()
+                regs[REG_RA] = old_pc + 4; // not +8 because PC is incremented in the IF()
                 // fall through
             case OP_J:
                 jump = true;
@@ -474,7 +474,7 @@ struct EXECUTOR
             case OP_ANDI:
                 aluResult = rs & zeImm;
                 break;
-            case OP_BEQ:
+         /*   case OP_BEQ:
                 if (rs == rt){
                     state.ex_mem_stage.npc = 4 + (seImm << 2);
                 }
@@ -483,7 +483,7 @@ struct EXECUTOR
                 if (rs != rt){
                     state.ex_mem_stage.npc = 4 + (seImm << 2);
                 }
-                break;
+                break; */
             case OP_LBU:
                 aluResult = addr;
                 break;
