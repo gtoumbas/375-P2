@@ -457,8 +457,12 @@ struct EXECUTOR
 
     void executeI(STATE& state) {
         uint32_t op = state.id_ex_stage.decodedInst.op;
-        uint32_t rt = state.id_ex_stage.decodedInst.rt;
-        uint32_t rs = state.id_ex_stage.decodedInst.rs;
+        uint32_t rt = state.id_ex_stage.decodedInst.rt; // register number
+        uint32_t rs = state.id_ex_stage.decodedInst.rs; // register number
+
+        uint32_t rs_value = state.id_ex_stage.readData1;    // Amir
+        uint32_t rt_value = state.id_ex_stage.readData2;    // Amir
+
         uint32_t imm = state.id_ex_stage.decodedInst.imm;
         uint32_t seImm = state.id_ex_stage.decodedInst.signExtIm;
         uint32_t zeImm = imm;
@@ -470,13 +474,13 @@ struct EXECUTOR
 
         switch(op){
             case OP_ADDI:
-                ret = doAddSub(aluResult, rs, seImm, true, true);
+                ret = doAddSub(aluResult, rs_value, seImm, true, true);
                 break;
             case OP_ADDIU:
-                ret = doAddSub(aluResult, rs, seImm, true, false);
+                ret = doAddSub(aluResult, rs_value, seImm, true, false);
                 break;
             case OP_ANDI:
-                aluResult = rs & zeImm;
+                aluResult = rs_value & zeImm;
                 break;
             case OP_BEQ:
                 /*if (rs == rt){
@@ -502,17 +506,17 @@ struct EXECUTOR
                 aluResult = addr;
                 break;
             case OP_ORI:
-                aluResult = rs | zeImm;
+                aluResult = rs_value | zeImm;
                 break;
             case OP_SLTI:
-                if (rs >> 31 != seImm >> 31) { // Different signs
-                    aluResult = (rs >> 31) ? 1 : 0; 
+                if (rs_value >> 31 != seImm >> 31) { // Different signs
+                    aluResult = (rs_value >> 31) ? 1 : 0; 
                 } else {
-                    aluResult = (rs < seImm) ? 1 : 0;
+                    aluResult = (rs_value < seImm) ? 1 : 0;
                 }
                 break;
             case OP_SLTIU:
-                aluResult = (rs < seImm) ? 1 : 0;
+                aluResult = (rs_value < seImm) ? 1 : 0;
                 break;
             // TODO Rest of store instructions
             case OP_SB:
