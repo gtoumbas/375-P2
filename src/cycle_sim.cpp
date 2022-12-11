@@ -546,9 +546,6 @@ struct EXECUTOR
         state.ex_mem_stage.aluResult = aluResult;
     }
 
-    void executeJ(STATE& state){
-    }
-
 };
 
 
