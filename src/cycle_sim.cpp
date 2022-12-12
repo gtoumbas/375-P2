@@ -42,7 +42,7 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 // *------------------------------------------------------------*
 
 
-void updateControl(STATE & state, DecodedInst & decIns){
+void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
 
     if (VALID_OP.count(decIns.op) == 0) { // ILLEGAL_INST
         state.exception = true;
@@ -50,17 +50,19 @@ void updateControl(STATE & state, DecodedInst & decIns){
     }
 
     if (decIns.op == OP_ZERO) {
-        state.id_ex_stage.ctrl = CONTROL_RTYPE;
+        ctrl = CONTROL_RTYPE;
+        return;
     }
-    else if (decIns.op == OP_LW || decIns.op == OP_LHU || decIns.op == OP_LBU || decIns.op == OP_LUI) {
-        state.id_ex_stage.ctrl = CONTROL_LOAD;
+    if (decIns.op == OP_LW || decIns.op == OP_LHU || decIns.op == OP_LBU || decIns.op == OP_LUI) {
+        ctrl = CONTROL_LOAD;
+        return;
     }
-    else if (decIns.op == OP_SW || decIns.op == OP_SH || decIns.op == OP_SB || decIns.op == OP_SLTI || decIns.op == OP_SLTIU) {
-        state.id_ex_stage.ctrl = CONTROL_STORE;
+    if (decIns.op == OP_SW || decIns.op == OP_SH || decIns.op == OP_SB || decIns.op == OP_SLTI || decIns.op == OP_SLTIU) {
+        ctrl = CONTROL_STORE;
+        return;
     }
-    else{
-        state.id_ex_stage.ctrl = CONTROL_NOP;
-    }
+    
+    ctrl = CONTROL_NOP;
 }
 
 // Mem helper
@@ -122,35 +124,30 @@ void ID(STATE& state){
     // Read instruction from IF stage and Decode
     uint32_t instr = state.if_id_stage.instr;
     DecodedInst decodedInst;
-    decodeInst(instr, decodedInst);
+    CONTROL ctrl;
 
-    // ILLEGAL_INST
-    if (state.exception == true) {
-        state.if_id_stage = IF_ID_STAGE{};
+    decodeInst(instr, decodedInst);
+    updateControl(state, decodedInst, ctrl);
+
+    if (state.exception) {
+        state.branch_pc = EXCEPTION_ADDR;
         return;
     }
 
     state.hzd -> jump = false;  // erase previously written value 
-
-    // if branch -> calculate address and check condition
-    // if load_use hazard -> stall
     state.hzd -> checkHazard(state, decodedInst);
 
     uint32_t op = decodedInst.op;
     if(op == OP_BNE || op == OP_BEQ || op == OP_J || op == OP_JAL){ // set inst to zero, because branch or jump is completed
-        decodeInst(0, decodedInst);
+        state.id_ex_stage = ID_EX_STAGE{};
+        return;
     }
 
-    // update inst 
     state.id_ex_stage.decodedInst = decodedInst;
     state.id_ex_stage.npc = state.if_id_stage.npc;
     state.id_ex_stage.readData1 = regs[decodedInst.rs];
     state.id_ex_stage.readData2 = regs[decodedInst.rt];
- 
-    // FLUSH IF_ID IF STALL, DI NOT CHANGE TO EXCEPTION_PC
-    if (state.stall) {
-        state.if_id_stage = IF_ID_STAGE{};
-    }
+    state.id_ex_stage.ctrl = ctrl;
 }
 
 void EX(STATE & state)
@@ -213,15 +210,13 @@ void EX(STATE & state)
         state.ex_mem_stage = EX_MEM_STAGE{};
         state.id_ex_stage = ID_EX_STAGE{};
         state.if_id_stage = IF_ID_STAGE{};
-    } else {
-        state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
-        state.ex_mem_stage.npc = state.id_ex_stage.npc;
-        state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2; 
-        // wrote to state.ex_mem.aluResult in execute(), do not do it here
-    }
-
-    // Coppy values from ID_EX to EX_MEM
+        return;
+    } 
+    state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
+    state.ex_mem_stage.npc = state.id_ex_stage.npc;
+    state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
+
 }
 
 
@@ -263,16 +258,19 @@ void MEM(STATE & state){
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
-
-    // Copy values from EX_MEM to MEM_WB
     state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
 }
 
 
-void WB(STATE & state){ 
+void WB(STATE & state){
+    uint32_t writeData = (state.mem_wb_stage.ctrl.memToReg) ? state.mem_wb_stage.data : state.mem_wb_stage.aluResult;
+    uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
+  
+    if (state.mem_wb_stage.ctrl.regWrite) {
+        regs[where] = writeData;
+    } 
 }
 
-// *------------------------------------------------------------*
 
 
 // Driver stuff
