@@ -123,6 +123,10 @@ void ID(STATE& state){
     
     // Read instruction from IF stage and Decode
     uint32_t instr = state.if_id_stage.instr;
+    if (instr == 0xfeedfeed) {
+        state.finish = true;
+        return;
+    }
     DecodedInst decodedInst;
     CONTROL ctrl;
 
@@ -316,10 +320,11 @@ int main(int argc, char *argv[])
         return -EBADF;
     }
     
-    while (true)
+    uint32_t DrainIters = 3;
+    while (DrainIters > 0)
     {
         printState(state, std::cout, false);
-        
+        std::cout << state.exception << "wdadwa" << std::endl; 
         
         WB(state);
         
@@ -343,8 +348,9 @@ int main(int argc, char *argv[])
         }
 
         
-        if (!state.stall) {
+        if (!state.stall && !state.finish) {
             IF(state);
+            DrainIters = 3;
         }
                 
 
