@@ -53,15 +53,18 @@ void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
         ctrl = CONTROL_RTYPE;
         return;
     }
-    if (decIns.op == OP_LW || decIns.op == OP_LHU || decIns.op == OP_LBU || decIns.op == OP_LUI) {
+    if (LOAD_OP.count(decIns.op) > 0) {
         ctrl = CONTROL_LOAD;
         return;
     }
-    if (decIns.op == OP_SW || decIns.op == OP_SH || decIns.op == OP_SB || decIns.op == OP_SLTI || decIns.op == OP_SLTIU) {
+    if (STORE_OP.count(decIns.op) > 0) {
         ctrl = CONTROL_STORE;
         return;
     }
-    
+    if (I_TYPE.count(decIns.op) > 0) {
+        ctrl = CONTROL_ITYPE;
+        return;
+    }
     ctrl = CONTROL_NOP;
 }
 
@@ -153,6 +156,7 @@ void ID(STATE& state){
     state.id_ex_stage.readData1 = state.regs[decodedInst.rs];
     state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
     state.id_ex_stage.ctrl = ctrl;
+
 }
 
 void EX(STATE & state)
@@ -197,6 +201,7 @@ void EX(STATE & state)
     if (op == OP_ZERO) {
         executor.executeR(state);
     } else if (I_TYPE.count(op) != 0) {
+        std::cout << "I TYPE EXECUTION\n";
         executor.executeI(state);
     } // branch and jump finished by this time
 
@@ -254,14 +259,16 @@ void MEM(STATE & state){
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
+    std::cout << "REGDST IN MEM STAGE EQUALS " << state.mem_wb_stage.ctrl.regDst << "\n\n\n";
 }
 
 
 void WB(STATE & state){
     uint32_t writeData = (state.mem_wb_stage.ctrl.memToReg) ? state.mem_wb_stage.data : state.mem_wb_stage.aluResult;
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
-  
+    std::cout << "REGDST IN WB " << state.mem_wb_stage.ctrl.regDst << "\n";
     if (state.mem_wb_stage.ctrl.regWrite) {
+        std::cout << where;
         state.regs[where] = writeData;
     } 
 }
@@ -324,7 +331,7 @@ int main(int argc, char *argv[])
     uint32_t DrainIters = 3;
     while (DrainIters--)
     {
-        printState(state, std::cout, false);
+       printState(state, std::cout, false);
         
         WB(state);
         

@@ -16,8 +16,8 @@ struct CONTROL
 auto CONTROL_RTYPE = CONTROL{true, true, false, false, false, false, false, true, false};
 auto CONTROL_LOAD = CONTROL{false, false, false, true, false, true, false, true, true};
 auto CONTROL_STORE = CONTROL{false, false, false, true, false, false, true, false, false};
+auto CONTROL_ITYPE = CONTROL{true, true, false, false, false, false, false, true, false};
 auto CONTROL_NOP = CONTROL{false, false, false, false, false, false, false, false, false};
-
 
 
 // Decoded instruction struct
