@@ -86,7 +86,8 @@ enum HAZARD_TYPE{
     NONE, EX, MEM
 };
 
-std::set<int> VALID_OP = {0, 0x8, 0x9, 0xc, 0x4, 0x5, 0x24, 0x25, 0x30, 0xf, 0x23, 0xd, 0xa, 0xb, 0x28, 0x38, 0x29, 0x2b, 0x2, 0x3};
-
+std::set<int> VALID_OP = {OP_ZERO, OP_ADDI,  OP_ADDIU, OP_ANDI,  OP_BEQ, OP_BNE, OP_LBU, OP_LHU, OP_LL, OP_LUI, 
+                        OP_LW, OP_ORI, OP_SLTI, OP_SLTIU, OP_SB, OP_SC, OP_SH, OP_SW, OP_J, OP_JAL};
+std::set<int> 
 
 #endif

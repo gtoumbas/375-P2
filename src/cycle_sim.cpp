@@ -188,22 +188,12 @@ void EX(STATE & state)
     state.id_ex_stage.readData2 = readData2;
 
     // DO ALU Operations
-    switch(state.id_ex_stage.decodedInst.op){
-        case OP_ZERO: //R tytpe 
-            executor.executeR(state);
-            break;
-        case OP_J:
-            break;
-        case OP_JAL:
-            break;
-        case OP_BEQ:    // branch done in the ID
-            break;
-        case OP_BNE:    // branch done in the ID
-            break;
-        default: //I type not BNE and BEQ
-            executor.executeI(state);
-            break;
-    }
+    uint32_t op = state.id_ex_stage.decodedInst.op;
+    if (op == OP_ZERO) {
+        executor.executeR(state);
+    } else if (I_TYPE.count(op) != 0) {
+        executor.executeI(state);
+    } // branch and jump finished by this time
 
     if (state.exception) {
         state.branch_pc = EXCEPTION_ADDR; // the textbook says we should add 4 and substract 4 in the exception handler
@@ -310,50 +300,60 @@ int initMemory(std::ifstream & inputProg)
 // Main function
 int main(int argc, char *argv[])
 {
-    // Initialize state ()
     STATE state = {};
-    // Initialize registers
-    for(int i = 0; i < 32; i++){ regs[i] = 0;
-    }
-    // Initialize memory
-    // if (argc != 2)
-    // {
-    //     cout << "Usage: ./cycle_sim <file name>" << endl;
-    //     return -EINVAL;
-    // }
+    state.exec = new EXECUTOR{};
+    state.hzd = new HAZARD_UNIT{};
+    state.fwd = new FORWARD_UNIT{};
+    
+    for(int i = 0; i < 32; i++){ regs[i] = 0;}
 
-    ifstream prog;
-    prog.open(argv[1], ios::binary | ios::in);
-
+    std::ifstream prog; 
+    prog.open(argv[1], std::ios::binary | std::ios::in);
     mem = createMemoryStore();
 
     if (initMemory(prog))
     {
         return -EBADF;
     }
-
-    // Step through the five stages
+    
     while (true)
     {
-        // Print state
         printState(state, std::cout, false);
-        // Execute stages
+        
+        
         WB(state);
+        
+        
         MEM(state);
+        
+        
         EX(state);
+        // Arithmetic overflow
+        if (state.exception) {
+            state.pc = state.branch_pc;
+            state.exception = false;
+        }
+
         ID(state);
-        // check state.stall. Don't fetch or increment PC if state.stall = true, add nop
-        IF(state);
-        // Update state
-        state.pc = state.if_stage.npc; //Not right
+
+        // Illegal Instruction
+        if (state.exception) {
+            state.pc = state.branch_pc;
+            state.exception = false;
+        }
+
+        
+        if (!state.stall) {
+            IF(state);
+        }
+                
+
         state.cycles++;
-        // If pc > 16 exit
         if(state.pc > 16) break;
     }
-    // Print final state
-    printState(state, std::cout, true);
 
-    // Dump memery
+
+    printState(state, std::cout, true);
     dumpMemoryState(mem);
     
 }
