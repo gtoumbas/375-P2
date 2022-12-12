@@ -30,7 +30,7 @@ void printState(STATE & state, std::ostream & out, bool printReg)
     if(printReg){
         out << "Registers:" << std::endl;
         for(int i = 0; i < NUM_REGS; i++){
-            out << "$" << std::dec << i << ": " << std::hex << regs[i] << std::endl;
+            out << "$" << std::dec << i << ": " << std::hex << state.regs[i] << std::endl;
         }
     }
     out << std::endl;
@@ -66,7 +66,7 @@ void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
 }
 
 // Mem helper
-int doLoad(uint32_t addr, MemEntrySize size, uint8_t rt)
+int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint8_t rt)
 {
     uint32_t value = 0;
     int ret = 0;
@@ -80,13 +80,13 @@ int doLoad(uint32_t addr, MemEntrySize size, uint8_t rt)
     switch (size)
     {
     case BYTE_SIZE:
-            regs[rt] = value & 0xFF;
+            state.regs[rt] = value & 0xFF;
             break;
     case HALF_SIZE:
-            regs[rt] = value & 0xFFFF;
+            state.regs[rt] = value & 0xFFFF;
             break;
     case WORD_SIZE:
-            regs[rt] = value;
+            state.regs[rt] = value;
             break;
     default:
             std::cerr << "Invalid size passed, cannot read/write memory" << std::endl;
@@ -145,8 +145,8 @@ void ID(STATE& state){
 
     state.id_ex_stage.decodedInst = decodedInst;
     state.id_ex_stage.npc = state.if_id_stage.npc;
-    state.id_ex_stage.readData1 = regs[decodedInst.rs];
-    state.id_ex_stage.readData2 = regs[decodedInst.rt];
+    state.id_ex_stage.readData1 = state.regs[decodedInst.rs];
+    state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
     state.id_ex_stage.ctrl = ctrl;
 }
 
@@ -158,11 +158,11 @@ void EX(STATE & state)
 
     // set readReg1
     switch (state.fwd -> forward1) {
-        case HAZARD_TYPE::EX:
+        case HAZARD_TYPE::EX_HAZ:
             readData1 = state.ex_mem_stage.aluResult;
             break;
         
-        case HAZARD_TYPE::MEM:
+        case HAZARD_TYPE::MEM_HAZ:
             readData1 = state.mem_wb_stage.aluResult;
             break;
 
@@ -171,11 +171,11 @@ void EX(STATE & state)
     }
     // set readReg2
     switch (state.fwd -> forward2) {
-        case HAZARD_TYPE::EX:
+        case HAZARD_TYPE::EX_HAZ:
             readData2 =  state.ex_mem_stage.aluResult;
             break;
         
-        case HAZARD_TYPE::MEM:
+        case HAZARD_TYPE::MEM_HAZ:
             readData2 = state.mem_wb_stage.aluResult;
             break;
 
@@ -232,13 +232,13 @@ void MEM(STATE & state){
             break;
         // Loading
         case OP_LW:
-            ret = doLoad(addr, WORD_SIZE, data);
+            ret = doLoad(state, addr, WORD_SIZE, data);
             break;
         case OP_LHU:
-            ret = doLoad(addr, HALF_SIZE, data);
+            ret = doLoad(state, addr, HALF_SIZE, data);
             break;
         case OP_LBU:
-            ret = doLoad(addr, BYTE_SIZE, data);
+            ret = doLoad(state, addr, BYTE_SIZE, data);
             break;
         // Default
         default:
@@ -257,7 +257,7 @@ void WB(STATE & state){
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
   
     if (state.mem_wb_stage.ctrl.regWrite) {
-        regs[where] = writeData;
+        state.regs[where] = writeData;
     } 
 }
 
@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
     state.hzd = new HAZARD_UNIT{};
     state.fwd = new FORWARD_UNIT{};
     
-    for(int i = 0; i < 32; i++){ regs[i] = 0;}
+    for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
 
     std::ifstream prog; 
     prog.open(argv[1], std::ios::binary | std::ios::in);
@@ -349,7 +349,7 @@ int main(int argc, char *argv[])
                 
 
         state.cycles++;
-        if(state.pc > 16) break;
+        if(state.pc > 32) break;
     }
 
 

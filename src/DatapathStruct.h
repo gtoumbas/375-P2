@@ -11,7 +11,7 @@
 #define NUM_REGS 32
 
 // Static global variables...
-static uint32_t regs[NUM_REGS];
+// static uint32_t regs[NUM_REGS];
 
 // HAZARD + FORWARD UNITS AND STATE
 // *------------------------------------------------------------*
@@ -23,6 +23,7 @@ struct STATE
 {
     uint32_t pc, branch_pc;
     uint32_t cycles;
+    uint32_t regs[NUM_REGS];
     IF_ID_STAGE if_id_stage;
     ID_EX_STAGE id_ex_stage;
     EX_MEM_STAGE ex_mem_stage;
@@ -33,6 +34,7 @@ struct STATE
     bool stall;
     bool delay;
     bool exception;
+    
 };
 
 
@@ -45,18 +47,18 @@ struct FORWARD_UNIT
     {
         // forward1
         if (checkEX1(state)) {
-            forward1 = HAZARD_TYPE::EX;
+            forward1 = HAZARD_TYPE::EX_HAZ;
         } else if (checkMEM1(state)) {
-            forward1 = HAZARD_TYPE::MEM;
+            forward1 = HAZARD_TYPE::MEM_HAZ;
         } else {
             forward1 = HAZARD_TYPE::NONE;
         }
 
         // forward2
         if (checkEX2(state)) {
-            forward2 = HAZARD_TYPE::EX;
+            forward2 = HAZARD_TYPE::EX_HAZ;
         } else if (checkMEM2(state)) {
-            forward2 = HAZARD_TYPE::MEM;
+            forward2 = HAZARD_TYPE::MEM_HAZ;
         } else {
             forward2 = HAZARD_TYPE::NONE;
         } 
@@ -120,8 +122,8 @@ private:
     // done during the id stage
     void checkBranch(STATE& state, DecodedInst& decodedInst) 
     {
-        uint32_t readReg1 = regs[decodedInst.rs];
-        uint32_t readReg2 = regs[decodedInst.rt];
+        uint32_t readReg1 = state.regs[decodedInst.rs];
+        uint32_t readReg2 = state.regs[decodedInst.rt];
         uint32_t old_pc = state.if_id_stage.npc;
         uint32_t op = decodedInst.op;
         // done in the ID stage
@@ -135,7 +137,7 @@ private:
                 state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
                 return;
             case OP_JAL:
-                regs[REG_RA] = old_pc + 4; // not +8 because PC is incremented in the IF()
+                state.regs[REG_RA] = old_pc + 4; // not +8 because PC is incremented in the IF()
                 // fall through
             case OP_J:
                 jump = true;

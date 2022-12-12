@@ -83,11 +83,12 @@ enum FUN_IDS{
 };
 
 enum HAZARD_TYPE{
-    NONE, EX, MEM
+    NONE, EX_HAZ, MEM_HAZ
 };
 
 std::set<int> VALID_OP = {OP_ZERO, OP_ADDI,  OP_ADDIU, OP_ANDI,  OP_BEQ, OP_BNE, OP_LBU, OP_LHU, OP_LL, OP_LUI, 
                         OP_LW, OP_ORI, OP_SLTI, OP_SLTIU, OP_SB, OP_SC, OP_SH, OP_SW, OP_J, OP_JAL};
-std::set<int> 
+std::set<int> I_TYPE = {OP_ADDI,  OP_ADDIU, OP_ANDI,  OP_BEQ, OP_BNE, OP_LBU, OP_LHU, OP_LL, OP_LUI, 
+                        OP_LW, OP_ORI, OP_SLTI, OP_SLTIU, OP_SB, OP_SC, OP_SH, OP_SW};
 
 #endif
