@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
     }
     
     uint32_t DrainIters = 3;
-    while (DrainIters > 0)
+    while (DrainIters--)
     {
         printState(state, std::cout, false);
         std::cout << state.exception << "wdadwa" << std::endl; 
