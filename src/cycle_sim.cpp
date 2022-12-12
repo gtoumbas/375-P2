@@ -6,551 +6,15 @@
 #include "MemoryStore.h"
 #include "RegisterInfo.h"
 #include "EndianHelpers.h"
+#include "DatapathStruct.h"
 #include<set>
 
 #define END 0xfeedfeed
 #define EXCEPTION_ADDR 0x8000
 
-//Note that an instruction that modifies the PC will never throw an
-//exception or be prone to errors from the memory abstraction.
-//Thus a single value is enough to depict the status of an instruction.
-#define NOINC_PC 1
-#define OVERFLOW 2
-#define ILLEGAL_INST 3
-#define NUM_REGS 32
-
-// TODO 
-// ID Stage Exceptions (Amir) && Initialize Control unit in ID
-// EX Stage Exceptions (George)
-// Execute instructions function (Later)
-// Execute (R, I, J) Functions
-// I, R Instructions (George)
-// J Instruction function (Amir)
-// Last: Cache 
+static MemoryStore* mem;
 
 extern void dumpRegisterStateInternal(RegisterInfo & reg, std::ostream & reg_out);
-
-enum REG_IDS
-{
-    REG_ZERO,
-    REG_AT,
-    REG_V0,
-    REG_V1,
-    REG_A0,
-    REG_A1,
-    REG_A2,
-    REG_A3,
-    REG_T0,
-    REG_T1,
-    REG_T2,
-    REG_T3,
-    REG_T4,
-    REG_T5,
-    REG_T6,
-    REG_T7,
-    REG_S0,
-    REG_S1,
-    REG_S2,
-    REG_S3,
-    REG_S4,
-    REG_S5,
-    REG_S6,
-    REG_S7,
-    REG_T8,
-    REG_T9,
-    REG_K0,
-    REG_K1,
-    REG_GP,
-    REG_SP,
-
-
-    REG_FP,
-    REG_RA,
-};
-
-enum OP_IDS{
-    //R-type opcodes...
-    OP_ZERO = 0,
-    //I-type opcodes...
-    OP_ADDI = 0x8,
-    OP_ADDIU = 0x9,
-    OP_ANDI = 0xc,
-    OP_BEQ = 0x4,
-    OP_BNE = 0x5,
-    OP_LBU = 0x24,
-    OP_LHU = 0x25,
-    OP_LL = 0x30,
-    OP_LUI = 0xf,
-    OP_LW = 0x23,
-    OP_ORI = 0xd,
-    OP_SLTI = 0xa,
-    OP_SLTIU = 0xb,
-    OP_SB = 0x28,
-    OP_SC = 0x38,
-    OP_SH = 0x29,
-    OP_SW = 0x2b,
-    //J-type opcodes...
-    OP_J = 0x2,
-    OP_JAL = 0x3
-};
-
-set<int> VALID_OP = {0, 0x8, 0x9, 0xc, 0x4, 0x5, 0x24, 0x25, 0x30, 0xf, 0x23, 0xd, 0xa, 0xb, 0x28, 0x38, 0x29, 0x2b, 0x2, 0x3};
-
-enum FUN_IDS{
-    FUN_ADD = 0x20,
-    FUN_ADDU = 0x21,
-    FUN_AND = 0x24,
-    FUN_JR = 0x08,
-    FUN_NOR = 0x27,
-    FUN_OR = 0x25,
-    FUN_SLT = 0x2a,
-    FUN_SLTU = 0x2b,
-    FUN_SLL = 0x00,
-    FUN_SRL = 0x02,
-    FUN_SUB = 0x22,
-    FUN_SUBU = 0x23
-};
-
-using namespace std;
-
-// Static global variables...
-static uint32_t regs[NUM_REGS];
-static MemoryStore *mem;
-
-
-// Decoded instruction struct
-struct DecodedInst{ 
-    uint32_t instr;
-    uint32_t op;
-    uint32_t rs;
-    uint32_t rt;
-    uint32_t rd;
-    uint32_t shamt;
-    uint32_t funct;
-    uint32_t imm;
-    uint32_t signExtIm;
-    uint32_t zeroExtImm;
-    uint32_t addr;
-};
-
-
-// Pipeline stages 
-
-struct IF_ID_STAGE{
-    uint32_t instr;
-    uint32_t npc;
-};
-
-struct ID_EX_STAGE{
-    DecodedInst decodedInst;
-    uint32_t npc;
-    uint32_t readData1;
-    uint32_t readData2;
-
-    bool regDst;
-    bool regWrite;
-    bool ALUOp1;
-    bool ALUOp2;
-    bool ALUSrc;
-    bool memWrite;
-    bool memRead;
-    bool branch;
-    bool memToReg;
-};    
-
-struct EX_MEM_STAGE{
-    DecodedInst decodedInst;
-    uint32_t npc; 
-    uint32_t memoryAddr; // for Load and Store -- the value of second register in the prev stage. == readData2
-    uint32_t aluResult;
-
-    // Control 
-    bool regDst;
-    bool regWrite;
-    bool memRead;
-    bool memWrite;
-    bool branch;
-    bool ALUOp1;
-    bool ALUOp2;
-    bool ALUSrc;
-};
-
-struct MEM_WB_STAGE{
-    DecodedInst decodedInst;
-    uint32_t aluResult;
-    uint32_t data; 
-
-    // Control
-    bool regDst;
-    bool regWrite;
-    bool memRead;
-    bool memWrite;
-    bool branch;
-};
-
-// Instruction Helpers (Decoding)
-// *------------------------------------------------------------*
-// extract specific bits [start, end] from an instruction
-uint instructBits(uint32_t instruct, int start, int end)
-{
-    int run = start - end + 1;
-    uint32_t mask = (1 << run) - 1;
-    uint32_t clipped = instruct >> end;
-    return clipped & mask;
-}
-
-// sign extend while keeping values as uint's
-uint32_t signExt(uint16_t smol)
-{
-    uint32_t x = smol;
-    uint32_t extension = 0xffff0000;
-    return (smol & 0x8000) ? x ^ extension : x;
-}
-
-// Function to decode instruction
-void decodeInst(uint32_t inst, DecodedInst & decodedInst){
-        decodedInst.instr = inst;
-        decodedInst.op = instructBits(inst, 31, 26);
-        decodedInst.rs = instructBits(inst, 25, 21);
-        decodedInst.rt = instructBits(inst, 20, 16);
-        decodedInst.rd = instructBits(inst, 15, 11);
-        decodedInst.shamt = instructBits(inst, 10, 6);
-        decodedInst.funct = instructBits(inst, 5, 0);
-        decodedInst.imm = instructBits(inst, 15, 0);
-        decodedInst.signExtIm = signExt(decodedInst.imm);
-        decodedInst.zeroExtImm = decodedInst.imm;
-        decodedInst.addr = instructBits(inst, 25, 0) << 2;
-}
-
-
-// HAZARD + FORWARD UNITS AND STATE
-// *------------------------------------------------------------*
-struct FORWARD_UNIT; // do not delete or compilation error
-struct HAZARD_UNIT;  // do not delete or compilation error
-struct EXECUTOR;  // do not delete or compilation error
-struct STATE
-{
-    uint32_t pc, branch_pc;
-    uint32_t cycles;
-    IF_ID_STAGE if_id_stage;
-    ID_EX_STAGE id_ex_stage;
-    EX_MEM_STAGE ex_mem_stage;
-    MEM_WB_STAGE mem_wb_stage;
-    // added by Amir
-    FORWARD_UNIT* fwd;  // do not change, it must be pointer
-    HAZARD_UNIT*  hzd;
-    EXECUTOR* exec;
-    bool stall;
-    bool delay;
-    bool exception;
-};
-
-// HAZARD DETECTION AND FORWARDING
-enum class HAZARD_TYPE{
-    NONE, EX, MEM
-};
-
-struct FORWARD_UNIT 
-{
-    HAZARD_TYPE forward1;
-    HAZARD_TYPE forward2;
-
-    void checkFwd(STATE& state) 
-    {
-        // forward1
-        if (checkEX1(state)) {
-            forward1 = HAZARD_TYPE::EX;
-        } else if (checkMEM1(state)) {
-            forward1 = HAZARD_TYPE::MEM;
-        } else {
-            forward1 = HAZARD_TYPE::NONE;
-        }
-
-        // forward2
-        if (checkEX2(state)) {
-            forward2 = HAZARD_TYPE::EX;
-        } else if (checkMEM2(state)) {
-            forward2 = HAZARD_TYPE::MEM;
-        } else {
-            forward2 = HAZARD_TYPE::NONE;
-        } 
-    }
-private:
-
-    bool checkEX1(STATE& state) 
-    {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
-            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
-    }
-
-    bool checkEX2(STATE& state) 
-    {
-        return state.ex_mem_stage.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
-            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt);
-    }
-
-
-    bool checkMEM1(STATE& state) 
-    {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
-            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
-    }
-
-    bool checkMEM2(STATE& state) 
-    {
-        return state.mem_wb_stage.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
-            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt); 
-    }
-};
-
-
-struct HAZARD_UNIT 
-{
-    bool jump;
-
-    void checkHazard(STATE& state, DecodedInst& decodedInst) {
-        state.stall = false;
-        if (state.id_ex_stage.memRead) {    // check load_use if op = MemRead
-            checkLoadUse(state);
-        } else {                // check jump or branch: op = J, JAL, BEQ, BNE
-            checkBranch(state, decodedInst);
-        }
-    }
-
-
-private:
-    void checkLoadUse(STATE& state) 
-    {
-        uint32_t if_id_reg1 = instructBits(state.if_id_stage.instr, 25, 21);
-        uint32_t if_id_reg2 = instructBits(state.if_id_stage.instr, 20, 16);
-        if (state.id_ex_stage.memRead && ((state.id_ex_stage.decodedInst.rt == if_id_reg1) ||
-            (state.id_ex_stage.decodedInst.rt == if_id_reg2))) {
-                state.stall = true;
-        } else {
-            state.stall = false;
-        }
-    }
-
-    // done during the id stage
-    void checkBranch(STATE& state, DecodedInst& decodedInst) 
-    {
-        uint32_t readReg1 = regs[decodedInst.rs];
-        uint32_t readReg2 = regs[decodedInst.rt];
-        uint32_t old_pc = state.if_id_stage.npc;
-        uint32_t op = decodedInst.op;
-        // done in the ID stage
-        switch (op) {
-            case OP_BEQ:
-                jump = (readReg1 == readReg2);
-                state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
-                return;
-            case OP_BNE:
-                jump = (readReg1 != readReg2);
-                state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
-                return;
-            case OP_JAL:
-                regs[REG_RA] = old_pc + 4; // not +8 because PC is incremented in the IF()
-                // fall through
-            case OP_J:
-                jump = true;
-                state.branch_pc = (old_pc & 0xf0000000) | (decodedInst.addr << 2); 
-                return;
-        }
-    }
-};
-
-struct EXECUTOR 
-{
-    uint8_t getSign(uint32_t value)
-    {
-        return (value >> 31) & 0x1;
-    }
-
-    int doAddSub(uint32_t& aluResult, uint32_t s1, uint32_t s2, bool isAdd, bool checkOverflow)
-    {
-        bool overflow = false;
-        uint32_t result = 0;
-
-        // Not sure why she was casting this before
-        if (isAdd){result = s1 + s2;}
-        else{result = s1 - s2;}
-
-        if (checkOverflow)
-        {
-                if (isAdd)
-                {
-                    overflow = getSign(s1) == getSign(s2) && getSign(s2) != getSign(result);
-                }
-                else
-                {
-                    overflow = getSign(s1) != getSign(s2) && getSign(s2) == getSign(result);
-                }
-        }
-
-        if (overflow)
-        {
-                // Inform the caller that overflow occurred so it can take appropriate action.
-                return OVERFLOW;
-        }
-
-        // Otherwise update state and return success.
-        aluResult = result;
-
-        return 0;
-    }
-
-    void executeR(STATE& state){
-
-        // Do I need to do anything with control signals here?
-        
-        uint32_t funct = state.id_ex_stage.decodedInst.funct;
-        uint32_t rd = state.id_ex_stage.decodedInst.rd; // register number
-        uint32_t rs = state.id_ex_stage.decodedInst.rs; // register number
-        uint32_t rt = state.id_ex_stage.decodedInst.rt; // register number
-
-        uint32_t rs_value = state.id_ex_stage.readData1;    // Amir
-        uint32_t rt_value = state.id_ex_stage.readData2;    // Amir
-
-        uint32_t shamt = state.id_ex_stage.decodedInst.shamt;
-        // Perform ALU operation and store in EX/MEM aluResult
-        uint32_t aluResult;
-        int ret = 0;
-        switch (funct){
-            case FUN_ADD:
-                ret = doAddSub(aluResult, rs_value, rt_value, true, true);
-                break;
-            case FUN_ADDU:
-                ret = doAddSub(aluResult, rs_value, rt_value, true, false);
-                break;
-            case FUN_AND:
-                aluResult = rs_value & rt_value;
-                break;
-            case FUN_JR:
-                //FIXME Should we be updating the PC here?
-                state.ex_mem_stage.npc = rs_value;
-                break;
-            case FUN_NOR:
-                aluResult = ~(rs_value | rt_value);
-                break;
-            case FUN_OR:
-                aluResult = rs_value | rt_value;
-                break;
-            case FUN_SLT:
-                if ((rs_value >> 31) != (rt_value >> 31)) { // Different signs
-                    aluResult = (rs_value >> 31) ? 1 : 0; 
-                } else {
-                    aluResult = (rs_value < rt_value) ? 1 : 0;
-                }
-                break;
-            case FUN_SLTU:
-                aluResult = (rs_value < rt_value) ? 1 : 0;
-                break;
-            case FUN_SLL:
-                aluResult = rt_value << shamt;
-                break;
-            case FUN_SRL:
-                aluResult = rt_value >> shamt;
-                break;
-            case FUN_SUB:
-                ret = doAddSub(aluResult, rs_value, rt_value, false, true);
-                break;
-            case FUN_SUBU:
-                ret = doAddSub(aluResult, rs_value, rt_value, false, false);
-                break;
-            default:
-                // TODO jump to exception address=
-                ret = ILLEGAL_INST;
-        }
-        if (ret == OVERFLOW || ret == ILLEGAL_INST) {
-            state.exception = true;
-            return;
-        }
-        state.ex_mem_stage.aluResult = aluResult;
-    }
-
-    void executeI(STATE& state) {
-        uint32_t op = state.id_ex_stage.decodedInst.op;
-        uint32_t rt = state.id_ex_stage.decodedInst.rt; // register number
-        uint32_t rs = state.id_ex_stage.decodedInst.rs; // register number
-
-        uint32_t rs_value = state.id_ex_stage.readData1;    // Amir
-        uint32_t rt_value = state.id_ex_stage.readData2;    // Amir
-
-        uint32_t imm = state.id_ex_stage.decodedInst.imm;
-        uint32_t seImm = state.id_ex_stage.decodedInst.signExtIm;
-        uint32_t zeImm = imm;
-        uint32_t aluResult;
-        uint32_t addr = rs + seImm;
-
-        int ret = 0;
-        uint32_t oldPC = state.id_ex_stage.npc;
-
-        switch(op){
-            case OP_ADDI:
-                ret = doAddSub(aluResult, rs_value, seImm, true, true);
-                break;
-            case OP_ADDIU:
-                ret = doAddSub(aluResult, rs_value, seImm, true, false);
-                break;
-            case OP_ANDI:
-                aluResult = rs_value & zeImm;
-                break;
-            case OP_BEQ:
-                /*if (rs == rt){
-                    state.ex_mem_stage.npc = 4 + (seImm << 2);
-                }*/
-                break;
-            case OP_BNE:
-                /*if (rs != rt){
-                    state.ex_mem_stage.npc = 4 + (seImm << 2);
-                }*/
-                break;
-            case OP_LBU:
-                aluResult = addr;
-                break;
-            case OP_LHU:
-                // Double check
-                aluResult = addr;
-                break;
-            case OP_LUI:
-                aluResult = imm << 16;
-                break;
-            case OP_LW:
-                aluResult = addr;
-                break;
-            case OP_ORI:
-                aluResult = rs_value | zeImm;
-                break;
-            case OP_SLTI:
-                if (rs_value >> 31 != seImm >> 31) { // Different signs
-                    aluResult = (rs_value >> 31) ? 1 : 0; 
-                } else {
-                    aluResult = (rs_value < seImm) ? 1 : 0;
-                }
-                break;
-            case OP_SLTIU:
-                aluResult = (rs_value < seImm) ? 1 : 0;
-                break;
-            // TODO Rest of store instructions
-            case OP_SB:
-                aluResult = addr;
-                break;
-            
-            default:
-                // TODO jump to exception address
-                ret = ILLEGAL_INST;
-        }
-
-        if (ret == OVERFLOW || ret == ILLEGAL_INST) {
-            state.exception = true;
-            return;
-        }
-
-        state.ex_mem_stage.aluResult = aluResult;
-    }
-
-};
-
 
 // Print State
 void printState(STATE & state, std::ostream & out, bool printReg)
@@ -577,6 +41,7 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 // Control 
 // *------------------------------------------------------------*
 
+
 void updateControl(STATE & state, DecodedInst & decIns){
 
     if (VALID_OP.count(decIns.op) == 0) { // ILLEGAL_INST
@@ -584,64 +49,17 @@ void updateControl(STATE & state, DecodedInst & decIns){
         return;
     }
 
-    // If statemetns to set control signals
-    // R type
     if (decIns.op == OP_ZERO) {
-        state.id_ex_stage.regDst = true;
-        state.id_ex_stage.ALUOp1 = true;
-        state.id_ex_stage.ALUOp2 = false;
-        state.id_ex_stage.ALUSrc = false;
-        state.id_ex_stage.branch = false;
-        state.id_ex_stage.memRead = false;
-        state.id_ex_stage.memWrite = false;
-        state.id_ex_stage.regWrite = true;
-        state.id_ex_stage.memToReg = false;
+        state.id_ex_stage.ctrl = CONTROL_RTYPE;
     }
     else if (decIns.op == OP_LW || decIns.op == OP_LHU || decIns.op == OP_LBU || decIns.op == OP_LUI) {
-        // Load instructions
-        state.id_ex_stage.regDst = false;
-        state.id_ex_stage.ALUOp1 = false;
-        state.id_ex_stage.ALUOp2 = false;
-        state.id_ex_stage.ALUSrc = true;
-        state.id_ex_stage.branch = false;
-        state.id_ex_stage.memRead = true;
-        state.id_ex_stage.memWrite = false;
-        state.id_ex_stage.regWrite = true;
-        state.id_ex_stage.memToReg = true;
+        state.id_ex_stage.ctrl = CONTROL_LOAD;
     }
-    // Store insturctions
     else if (decIns.op == OP_SW || decIns.op == OP_SH || decIns.op == OP_SB || decIns.op == OP_SLTI || decIns.op == OP_SLTIU) {
-        state.id_ex_stage.regDst = false;
-        state.id_ex_stage.ALUOp1 = false;
-        state.id_ex_stage.ALUOp2 = false;
-        state.id_ex_stage.ALUSrc = true;
-        state.id_ex_stage.branch = false;
-        state.id_ex_stage.memRead = false;
-        state.id_ex_stage.memWrite = true;
-        state.id_ex_stage.regWrite = false;
-        state.id_ex_stage.memToReg = false; 
-    }
-    else if (decIns.op == OP_BEQ || decIns.op == OP_BNE){
-        state.id_ex_stage.regDst = false;
-        state.id_ex_stage.ALUOp1 = false;
-        state.id_ex_stage.ALUOp2 = true;
-        state.id_ex_stage.ALUSrc = false;
-        state.id_ex_stage.branch = true;
-        state.id_ex_stage.memRead = false;
-        state.id_ex_stage.memWrite = false;
-        state.id_ex_stage.regWrite = false;
-        state.id_ex_stage.memToReg = false;
+        state.id_ex_stage.ctrl = CONTROL_STORE;
     }
     else{
-        state.id_ex_stage.regDst = false;
-        state.id_ex_stage.ALUOp1 = false;
-        state.id_ex_stage.ALUOp2 = false;
-        state.id_ex_stage.ALUSrc = false;
-        state.id_ex_stage.branch = false;
-        state.id_ex_stage.memRead = false;
-        state.id_ex_stage.memWrite = false;
-        state.id_ex_stage.regWrite = false;
-        state.id_ex_stage.memToReg = false;
+        state.id_ex_stage.ctrl = CONTROL_NOP;
     }
 }
 
@@ -653,7 +71,7 @@ int doLoad(uint32_t addr, MemEntrySize size, uint8_t rt)
     ret = mem->getMemValue(addr, value, size);
     if (ret)
     {
-            cout << "Could not get mem value" << endl;
+            std::cout << "Could not get mem value" << std::endl;
             return ret;
     }
 
@@ -669,7 +87,7 @@ int doLoad(uint32_t addr, MemEntrySize size, uint8_t rt)
             regs[rt] = value;
             break;
     default:
-            cerr << "Invalid size passed, cannot read/write memory" << endl;
+            std::cerr << "Invalid size passed, cannot read/write memory" << std::endl;
             return -EINVAL;
     }
 
@@ -734,7 +152,6 @@ void ID(STATE& state){
         state.if_id_stage = IF_ID_STAGE{};
     }
 }
-
 
 void EX(STATE & state)
 {
@@ -804,14 +221,7 @@ void EX(STATE & state)
     }
 
     // Coppy values from ID_EX to EX_MEM
-    state.ex_mem_stage.regDst = state.id_ex_stage.regDst;
-    state.ex_mem_stage.regWrite = state.id_ex_stage.regWrite;
-    state.ex_mem_stage.memRead = state.id_ex_stage.memRead;
-    state.ex_mem_stage.memWrite = state.id_ex_stage.memWrite;
-    state.ex_mem_stage.branch = state.id_ex_stage.branch;
-    state.ex_mem_stage.ALUOp1 = state.id_ex_stage.ALUOp1;
-    state.ex_mem_stage.ALUOp2 = state.id_ex_stage.ALUOp2;
-    state.ex_mem_stage.ALUSrc = state.id_ex_stage.ALUSrc;
+    state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
 }
 
 
@@ -855,23 +265,18 @@ void MEM(STATE & state){
     state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
 
     // Copy values from EX_MEM to MEM_WB
-    state.mem_wb_stage.regDst = state.ex_mem_stage.regDst;
-    state.mem_wb_stage.regWrite = state.ex_mem_stage.regWrite;
-    state.mem_wb_stage.memRead = state.ex_mem_stage.memRead;
-    state.mem_wb_stage.memWrite = state.ex_mem_stage.memWrite;
-    state.mem_wb_stage.branch = state.ex_mem_stage.branch;
+    state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
 }
 
 
-void WB(STATE & state){
-    
+void WB(STATE & state){ 
 }
 
 // *------------------------------------------------------------*
 
 
 // Driver stuff
-int initMemory(ifstream &inputProg)
+int initMemory(std::ifstream & inputProg)
 {
     // Check if mem is already initialized
 
@@ -887,7 +292,7 @@ int initMemory(ifstream &inputProg)
 
             if (ret)
             {
-                cout << "Could not set memory value!" << endl;
+                std::cout << "Could not set memory value!" << std::endl;
                 return -EINVAL;
             }
 
@@ -897,7 +302,7 @@ int initMemory(ifstream &inputProg)
     }
     else
     {
-        cout << "Invalid file stream or memory image passed, could not initialise memory values" << endl;
+        std::cout << "Invalid file stream or memory image passed, could not initialise memory values" << std::endl;
         return -EINVAL;
     }
 
