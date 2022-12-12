@@ -35,6 +35,7 @@ struct STATE
     bool delay;
     bool exception;
     bool finish;
+    
 };
 
 
