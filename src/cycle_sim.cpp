@@ -125,6 +125,7 @@ void ID(STATE& state){
     uint32_t instr = state.if_id_stage.instr;
     if (instr == 0xfeedfeed) {
         state.finish = true;
+        state.id_ex_stage = ID_EX_STAGE{};
         return;
     }
     DecodedInst decodedInst;
@@ -324,7 +325,6 @@ int main(int argc, char *argv[])
     while (DrainIters--)
     {
         printState(state, std::cout, false);
-        std::cout << state.exception << "wdadwa" << std::endl; 
         
         WB(state);
         
