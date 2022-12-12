@@ -6,6 +6,7 @@
 #include "MemoryStore.h"
 #include "RegisterInfo.h"
 #include "EndianHelpers.h"
+#include<set>
 
 #define END 0xfeedfeed
 #define EXCEPTION_ADDR 0x8000
@@ -61,6 +62,8 @@ enum REG_IDS
     REG_K1,
     REG_GP,
     REG_SP,
+
+
     REG_FP,
     REG_RA,
 };
@@ -91,6 +94,8 @@ enum OP_IDS{
     OP_JAL = 0x3
 };
 
+set<int> VALID_OP = {0, 0x8, 0x9, 0xc, 0x4, 0x5, 0x24, 0x25, 0x30, 0xf, 0x23, 0xd, 0xa, 0xb, 0x28, 0x38, 0x29, 0x2b, 0x2, 0x3};
+
 enum FUN_IDS{
     FUN_ADD = 0x20,
     FUN_ADDU = 0x21,
@@ -111,7 +116,6 @@ using namespace std;
 // Static global variables...
 static uint32_t regs[NUM_REGS];
 static MemoryStore *mem;
-
 
 
 // Decoded instruction struct
@@ -163,6 +167,9 @@ struct EX_MEM_STAGE{
     // Control 
     bool regDst;
     bool regWrite;
+    bool memRead;
+    bool memWrite;
+    bool branch;
     bool ALUOp1;
     bool ALUOp2;
     bool ALUSrc;
@@ -235,6 +242,7 @@ struct STATE
     EXECUTOR* exec;
     bool stall;
     bool delay;
+    bool exception;
 };
 
 // HAZARD DETECTION AND FORWARDING
@@ -451,15 +459,12 @@ struct EXECUTOR
                 break;
             default:
                 // TODO jump to exception address=
-                std::cerr << "Invalid funct" << std::endl;
-                exit(1);
+                ret = ILLEGAL_INST;
         }
-        if (ret == OVERFLOW) {
-            // TODO jump to exception address
-            std::cerr << "Overflow" << std::endl;
-            exit(1);
+        if (ret == OVERFLOW || ret == ILLEGAL_INST) {
+            state.exception = true;
+            return;
         }
-        
         state.ex_mem_stage.aluResult = aluResult;
     }
 
@@ -533,14 +538,12 @@ struct EXECUTOR
             
             default:
                 // TODO jump to exception address
-                std::cerr << "Invalid op" << std::endl;
-                exit(1);
+                ret = ILLEGAL_INST;
         }
 
-        if (ret == OVERFLOW) {
-            // TODO jump to exception address
-            std::cerr << "Overflow" << std::endl;
-            exit(1);
+        if (ret == OVERFLOW || ret == ILLEGAL_INST) {
+            state.exception = true;
+            return;
         }
 
         state.ex_mem_stage.aluResult = aluResult;
@@ -575,71 +578,105 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 // *------------------------------------------------------------*
 
 void updateControl(STATE & state, DecodedInst & decIns){
-    // Switch statement on op type
-    switch(decIns.op){
-        case OP_ZERO: // R type
-            state.id_ex_stage.regDst = true;
-            state.id_ex_stage.ALUOp1 = true;
-            state.id_ex_stage.ALUOp2 = false;
-            state.id_ex_stage.ALUSrc = false;
-            state.id_ex_stage.branch = false;
-            state.id_ex_stage.memRead = false;
-            state.id_ex_stage.memWrite = false;
-            state.id_ex_stage.regWrite = true;
-            state.id_ex_stage.memToReg = false;
-            break;
-        case OP_LW: 
-            state.id_ex_stage.regDst = false;
-            state.id_ex_stage.ALUOp1 = false;
-            state.id_ex_stage.ALUOp2 = false;
-            state.id_ex_stage.ALUSrc = true;
-            state.id_ex_stage.branch = false;
-            state.id_ex_stage.memRead = true;
-            state.id_ex_stage.memWrite = false;
-            state.id_ex_stage.regWrite = true;
-            state.id_ex_stage.memToReg = true;
-            break;
-        case OP_SW:
-            state.id_ex_stage.regDst = false;
-            state.id_ex_stage.ALUOp1 = false;
-            state.id_ex_stage.ALUOp2 = false;
-            state.id_ex_stage.ALUSrc = true;
-            state.id_ex_stage.branch = false;
-            state.id_ex_stage.memRead = false;
-            state.id_ex_stage.memWrite = true;
-            state.id_ex_stage.regWrite = false;
-            state.id_ex_stage.memToReg = false; 
-            break;
-        case OP_BEQ:
-            state.id_ex_stage.regDst = false;
-            state.id_ex_stage.ALUOp1 = false;
-            state.id_ex_stage.ALUOp2 = true;
-            state.id_ex_stage.ALUSrc = false;
-            state.id_ex_stage.branch = true;
-            state.id_ex_stage.memRead = false;
-            state.id_ex_stage.memWrite = false;
-            state.id_ex_stage.regWrite = false;
-            state.id_ex_stage.memToReg = false;
-            break;
-        default:
-            state.id_ex_stage.regDst = false;
-            state.id_ex_stage.ALUOp1 = false;
-            state.id_ex_stage.ALUOp2 = false;
-            state.id_ex_stage.ALUSrc = false;
-            state.id_ex_stage.branch = false;
-            state.id_ex_stage.memRead = false;
-            state.id_ex_stage.memWrite = false;
-            state.id_ex_stage.regWrite = false;
-            state.id_ex_stage.memToReg = false;
+
+    if (VALID_OP.count(decIns.op) == 0) { // ILLEGAL_INST
+        state.exception = true;
+        return;
+    }
+
+    // If statemetns to set control signals
+    // R type
+    if (decIns.op == OP_ZERO) {
+        state.id_ex_stage.regDst = true;
+        state.id_ex_stage.ALUOp1 = true;
+        state.id_ex_stage.ALUOp2 = false;
+        state.id_ex_stage.ALUSrc = false;
+        state.id_ex_stage.branch = false;
+        state.id_ex_stage.memRead = false;
+        state.id_ex_stage.memWrite = false;
+        state.id_ex_stage.regWrite = true;
+        state.id_ex_stage.memToReg = false;
+    }
+    else if (decIns.op == OP_LW || decIns.op == OP_LHU || decIns.op == OP_LBU || decIns.op == OP_LUI) {
+        // Load instructions
+        state.id_ex_stage.regDst = false;
+        state.id_ex_stage.ALUOp1 = false;
+        state.id_ex_stage.ALUOp2 = false;
+        state.id_ex_stage.ALUSrc = true;
+        state.id_ex_stage.branch = false;
+        state.id_ex_stage.memRead = true;
+        state.id_ex_stage.memWrite = false;
+        state.id_ex_stage.regWrite = true;
+        state.id_ex_stage.memToReg = true;
+    }
+    // Store insturctions
+    else if (decIns.op == OP_SW || decIns.op == OP_SH || decIns.op == OP_SB || decIns.op == OP_SLTI || decIns.op == OP_SLTIU) {
+        state.id_ex_stage.regDst = false;
+        state.id_ex_stage.ALUOp1 = false;
+        state.id_ex_stage.ALUOp2 = false;
+        state.id_ex_stage.ALUSrc = true;
+        state.id_ex_stage.branch = false;
+        state.id_ex_stage.memRead = false;
+        state.id_ex_stage.memWrite = true;
+        state.id_ex_stage.regWrite = false;
+        state.id_ex_stage.memToReg = false; 
+    }
+    else if (decIns.op == OP_BEQ || decIns.op == OP_BNE){
+        state.id_ex_stage.regDst = false;
+        state.id_ex_stage.ALUOp1 = false;
+        state.id_ex_stage.ALUOp2 = true;
+        state.id_ex_stage.ALUSrc = false;
+        state.id_ex_stage.branch = true;
+        state.id_ex_stage.memRead = false;
+        state.id_ex_stage.memWrite = false;
+        state.id_ex_stage.regWrite = false;
+        state.id_ex_stage.memToReg = false;
+    }
+    else{
+        state.id_ex_stage.regDst = false;
+        state.id_ex_stage.ALUOp1 = false;
+        state.id_ex_stage.ALUOp2 = false;
+        state.id_ex_stage.ALUSrc = false;
+        state.id_ex_stage.branch = false;
+        state.id_ex_stage.memRead = false;
+        state.id_ex_stage.memWrite = false;
+        state.id_ex_stage.regWrite = false;
+        state.id_ex_stage.memToReg = false;
     }
 }
 
+// Mem helper
+int doLoad(uint32_t addr, MemEntrySize size, uint8_t rt)
+{
+    uint32_t value = 0;
+    int ret = 0;
+    ret = mem->getMemValue(addr, value, size);
+    if (ret)
+    {
+            cout << "Could not get mem value" << endl;
+            return ret;
+    }
+
+    switch (size)
+    {
+    case BYTE_SIZE:
+            regs[rt] = value & 0xFF;
+            break;
+    case HALF_SIZE:
+            regs[rt] = value & 0xFFFF;
+            break;
+    case WORD_SIZE:
+            regs[rt] = value;
+            break;
+    default:
+            cerr << "Invalid size passed, cannot read/write memory" << endl;
+            return -EINVAL;
+    }
+
+    return 0;
+}
+
 // *------------------------------------------------------------*
-// Instruction Execution Helpers TODO
-// *------------------------------------------------------------*
-
-
-
 // Function for each stage
 // *------------------------------------------------------------*
 void IF(STATE & state){
@@ -668,6 +705,13 @@ void ID(STATE& state){
     uint32_t instr = state.if_id_stage.instr;
     DecodedInst decodedInst;
     decodeInst(instr, decodedInst);
+
+    // ILLEGAL_INST
+    if (state.exception == true) {
+        state.if_id_stage = IF_ID_STAGE{};
+        return;
+    }
+
     state.hzd -> jump = false;  // erase previously written value 
 
     // if branch -> calculate address and check condition
@@ -685,10 +729,9 @@ void ID(STATE& state){
     state.id_ex_stage.readData1 = regs[decodedInst.rs];
     state.id_ex_stage.readData2 = regs[decodedInst.rt];
  
-    // FLUSH IF_ID IF STALL
+    // FLUSH IF_ID IF STALL, DI NOT CHANGE TO EXCEPTION_PC
     if (state.stall) {
-        state.if_id_stage.instr = 0;
-        state.if_id_stage.npc = 0;
+        state.if_id_stage = IF_ID_STAGE{};
     }
 }
 
@@ -748,28 +791,80 @@ void EX(STATE & state)
             break;
     }
 
+    if (state.exception) {
+        state.branch_pc = EXCEPTION_ADDR; // the textbook says we should add 4 and substract 4 in the exception handler
+        state.ex_mem_stage = EX_MEM_STAGE{};
+        state.id_ex_stage = ID_EX_STAGE{};
+        state.if_id_stage = IF_ID_STAGE{};
+    } else {
+        state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
+        state.ex_mem_stage.npc = state.id_ex_stage.npc;
+        state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2; 
+        // wrote to state.ex_mem.aluResult in execute(), do not do it here
+    }
 
-    state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
-    state.ex_mem_stage.npc = state.id_ex_stage.npc;
-    state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2; 
-    // wrote to state.ex_mem.aluResult in execute(), do not do it here
+    // Coppy values from ID_EX to EX_MEM
+    state.ex_mem_stage.regDst = state.id_ex_stage.regDst;
+    state.ex_mem_stage.regWrite = state.id_ex_stage.regWrite;
+    state.ex_mem_stage.memRead = state.id_ex_stage.memRead;
+    state.ex_mem_stage.memWrite = state.id_ex_stage.memWrite;
+    state.ex_mem_stage.branch = state.id_ex_stage.branch;
+    state.ex_mem_stage.ALUOp1 = state.id_ex_stage.ALUOp1;
+    state.ex_mem_stage.ALUOp2 = state.id_ex_stage.ALUOp2;
+    state.ex_mem_stage.ALUSrc = state.id_ex_stage.ALUSrc;
 }
 
 
 void MEM(STATE & state){
+
+    uint32_t op = state.ex_mem_stage.decodedInst.op;
+    uint32_t rt = state.ex_mem_stage.decodedInst.rt;
+    uint32_t addr = state.ex_mem_stage.aluResult;
+    uint32_t imm = state.ex_mem_stage.decodedInst.imm;
+    uint32_t data;
+    
+    int ret = 0;
+    switch(op){
+        // Storing
+        case OP_SW:
+            ret = mem->setMemValue(addr, rt, WORD_SIZE);
+            break;
+        case OP_SH:
+            ret = mem->setMemValue(addr, rt, HALF_SIZE);
+            break;
+        case OP_SB:
+            ret = mem->setMemValue(addr, rt, BYTE_SIZE);
+            break;
+        // Loading
+        case OP_LW:
+            ret = doLoad(addr, WORD_SIZE, data);
+            break;
+        case OP_LHU:
+            ret = doLoad(addr, HALF_SIZE, data);
+            break;
+        case OP_LBU:
+            ret = doLoad(addr, BYTE_SIZE, data);
+            break;
+        // Default
+        default:
+            data = state.ex_mem_stage.aluResult;
+    }
+    
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
 
-    // Do actual memory stuff
-
+    // Copy values from EX_MEM to MEM_WB
+    state.mem_wb_stage.regDst = state.ex_mem_stage.regDst;
+    state.mem_wb_stage.regWrite = state.ex_mem_stage.regWrite;
+    state.mem_wb_stage.memRead = state.ex_mem_stage.memRead;
+    state.mem_wb_stage.memWrite = state.ex_mem_stage.memWrite;
+    state.mem_wb_stage.branch = state.ex_mem_stage.branch;
 }
 
 
 void WB(STATE & state){
-    // do not have to store anything after WB
-
-    // Do actual write back stuff
+    
 }
 
 // *------------------------------------------------------------*
