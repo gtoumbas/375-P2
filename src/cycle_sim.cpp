@@ -193,7 +193,7 @@ void EX(STATE & state)
             readData2 = state.id_ex_stage.readData2;
     }
 
-    std::cout << "Instruction " << state.id_ex_stage.decodedInst.op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << readData1 << " " << readData2 << "\n";
+    // std::cout << "Instruction " << state.id_ex_stage.decodedInst.op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << readData1 << " " << readData2 << "\n";
     state.id_ex_stage.readData1 = readData1;
     state.id_ex_stage.readData2 = readData2;
 
@@ -215,7 +215,7 @@ void EX(STATE & state)
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
-    std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
+    // std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
 }
 
 
@@ -358,7 +358,7 @@ int main(int argc, char *argv[])
                 
 
         state.cycles++;
-        if(state.pc > 32) break;
+        // if(state.pc > 32) break;
     }
 
 
