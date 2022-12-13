@@ -48,8 +48,10 @@ struct FORWARD_UNIT
         // forward1
         if (checkEX1(state)) {
             forward1 = HAZARD_TYPE::EX_HAZ;
+            std::cout << "FORWARD EX\n";
         } else if (checkMEM1(state)) {
             forward1 = HAZARD_TYPE::MEM_HAZ;
+            std::cout << "FORWARD_MEM\n";
         } else {
             forward1 = HAZARD_TYPE::NONE;
         }
@@ -57,8 +59,10 @@ struct FORWARD_UNIT
         // forward2
         if (checkEX2(state)) {
             forward2 = HAZARD_TYPE::EX_HAZ;
+            std::cout << "FORWARD_EX\n";
         } else if (checkMEM2(state)) {
             forward2 = HAZARD_TYPE::MEM_HAZ;
+            std::cout << "FORWARD MEM\n";
         } else {
             forward2 = HAZARD_TYPE::NONE;
         } 
@@ -67,27 +71,29 @@ private:
 
     bool checkEX1(STATE& state) 
     {
-        return state.ex_mem_stage.ctrl.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
-            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
+        uint32_t where = (state.ex_mem_stage.ctrl.regDst) ? state.ex_mem_stage.decodedInst.rd : state.ex_mem_stage.decodedInst.rt;
+        return state.ex_mem_stage.ctrl.regWrite && (where != 0) && (where == state.id_ex_stage.decodedInst.rs);
     }
 
     bool checkEX2(STATE& state) 
     {
-        return state.ex_mem_stage.ctrl.regWrite && (state.ex_mem_stage.decodedInst.rd != 0) &&
-            (state.ex_mem_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt);
+
+        uint32_t where = (state.ex_mem_stage.ctrl.regDst) ? state.ex_mem_stage.decodedInst.rd : state.ex_mem_stage.decodedInst.rt;
+        return state.ex_mem_stage.ctrl.regWrite && (where != 0) && (where == state.id_ex_stage.decodedInst.rt);
     }
 
 
     bool checkMEM1(STATE& state) 
     {
-        return state.mem_wb_stage.ctrl.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
-            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rs);
+
+        uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
+        return state.mem_wb_stage.ctrl.regWrite && (where != 0) && (where == state.id_ex_stage.decodedInst.rs);
     }
 
     bool checkMEM2(STATE& state) 
     {
-        return state.mem_wb_stage.ctrl.regWrite && (state.mem_wb_stage.decodedInst.rd != 0) &&
-            (state.mem_wb_stage.decodedInst.rd == state.id_ex_stage.decodedInst.rt); 
+        uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
+        return state.mem_wb_stage.ctrl.regWrite && (where != 0) && (where == state.id_ex_stage.decodedInst.rt); 
     }
 };
 
@@ -114,6 +120,7 @@ private:
         if (state.id_ex_stage.ctrl.memRead && ((state.id_ex_stage.decodedInst.rt == if_id_reg1) ||
             (state.id_ex_stage.decodedInst.rt == if_id_reg2))) {
                 state.stall = true;
+                std::cout << "LOAD USE\n";
         } else {
             state.stall = false;
         }

@@ -192,6 +192,7 @@ void EX(STATE & state)
             readData2 = state.id_ex_stage.readData2;
     }
 
+    std::cout << "Instruction " << state.id_ex_stage.decodedInst.op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << readData1 << " " << readData2 << "\n";
     // OVERWRITE REGISTER VALUES IF VALUES FORWARDED (different from what actually happens)
     state.id_ex_stage.readData1 = readData1;
     state.id_ex_stage.readData2 = readData2;
@@ -201,7 +202,6 @@ void EX(STATE & state)
     if (op == OP_ZERO) {
         executor.executeR(state);
     } else if (I_TYPE.count(op) != 0) {
-        std::cout << "I TYPE EXECUTION\n";
         executor.executeI(state);
     } // branch and jump finished by this time
 
@@ -259,16 +259,13 @@ void MEM(STATE & state){
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
-    std::cout << "REGDST IN MEM STAGE EQUALS " << state.mem_wb_stage.ctrl.regDst << "\n\n\n";
 }
 
 
 void WB(STATE & state){
     uint32_t writeData = (state.mem_wb_stage.ctrl.memToReg) ? state.mem_wb_stage.data : state.mem_wb_stage.aluResult;
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
-    std::cout << "REGDST IN WB " << state.mem_wb_stage.ctrl.regDst << "\n";
     if (state.mem_wb_stage.ctrl.regWrite) {
-        std::cout << where;
         state.regs[where] = writeData;
     } 
 }

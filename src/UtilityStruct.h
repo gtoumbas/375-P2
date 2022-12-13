@@ -13,7 +13,7 @@ struct CONTROL
     bool regWrite;
     bool memToReg;
 };
-auto CONTROL_RTYPE = CONTROL{true, true, false, false, false, false, false, true, false};
+auto CONTROL_RTYPE = CONTROL{true, true, true, false, false, false, false, true, false};
 auto CONTROL_LOAD = CONTROL{false, false, false, true, false, true, false, true, true};
 auto CONTROL_STORE = CONTROL{false, false, false, true, false, false, true, false, false};
 auto CONTROL_ITYPE = CONTROL{false, true, false, false, false, false, false, true, false};
