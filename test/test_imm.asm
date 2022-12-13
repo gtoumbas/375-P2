@@ -1,3 +1,4 @@
+.set noreorder
 addi $s1, $s2, 1 # Works
 addiu $s2, $s3, 2 # Works 
 andi $s3, $s2, 0xffff # s3 = 2 & 0xffff = 2 Works
@@ -15,6 +16,6 @@ sb $v0, 10($v1)
 sh $a0, 10($a1)
 sw $a1, 10($a2)
 .word 0xfeedfeed
-.word 0x1234
-.word 0xabcd
-.word 0xbaba
+.word 0x12345678
+.word 0xabcdabcd
+.word 0xbabababa
