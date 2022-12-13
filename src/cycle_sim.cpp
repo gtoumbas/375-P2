@@ -145,10 +145,6 @@ void ID(STATE& state){
     state.hzd -> jump = false;  // erase previously written value 
     state.hzd -> checkHazard(state, decodedInst);
 
-   // if (state.stall) {
-   //     state.if_id_stage = IF_ID_STAGE{}; // flush or will execute this again
-   // }
-
     if (state.stall ||JB_OP.count(decodedInst.op) > 0) { // set inst to zero, because branch or jump is completed
         state.id_ex_stage = ID_EX_STAGE{};
         return;
