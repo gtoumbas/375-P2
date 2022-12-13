@@ -80,6 +80,7 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint8_t rt)
             return ret;
     }
 
+    std::cout << "DO LOAD: " << addr << " " << value << " " << size << "\n";
     switch (size)
     {
     case BYTE_SIZE:
@@ -193,7 +194,6 @@ void EX(STATE & state)
     }
 
     std::cout << "Instruction " << state.id_ex_stage.decodedInst.op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << readData1 << " " << readData2 << "\n";
-    // OVERWRITE REGISTER VALUES IF VALUES FORWARDED (different from what actually happens)
     state.id_ex_stage.readData1 = readData1;
     state.id_ex_stage.readData2 = readData2;
 
@@ -201,12 +201,12 @@ void EX(STATE & state)
     uint32_t op = state.id_ex_stage.decodedInst.op;
     if (op == OP_ZERO) {
         executor.executeR(state);
-    } else if (I_TYPE.count(op) != 0) {
+    } else if (I_TYPE.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
         executor.executeI(state);
     } // branch and jump finished by this time
 
     if (state.exception) {
-        state.branch_pc = EXCEPTION_ADDR; // the textbook says we should add 4 and substract 4 in the exception handler
+        state.branch_pc = EXCEPTION_ADDR; 
         state.ex_mem_stage = EX_MEM_STAGE{};
         state.id_ex_stage = ID_EX_STAGE{};
         state.if_id_stage = IF_ID_STAGE{};
@@ -214,9 +214,8 @@ void EX(STATE & state)
     } 
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
-    state.ex_mem_stage.memoryAddr = state.id_ex_stage.readData2;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
-
+    std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
 }
 
 

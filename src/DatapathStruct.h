@@ -324,11 +324,15 @@ struct EXECUTOR
             case OP_SLTIU:
                 aluResult = (rs_value < seImm) ? 1 : 0;
                 break;
-            // TODO Rest of store instructions
             case OP_SB:
                 aluResult = addr;
                 break;
-// TODO jump to exception address
+            case OP_SW:
+                aluResult = addr;
+                break;
+            case OP_SH:
+                aluResult = addr;
+                break;
         }
 
         if (ret == OVERFLOW) {

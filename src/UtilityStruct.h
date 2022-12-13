@@ -83,7 +83,6 @@ struct ID_EX_STAGE{
 struct EX_MEM_STAGE{
     DecodedInst decodedInst;
     uint32_t npc; 
-    uint32_t memoryAddr; // for Load and Store -- the value of second register in the prev stage. == readData2
     uint32_t aluResult;
     CONTROL ctrl;
 };
