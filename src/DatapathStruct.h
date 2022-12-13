@@ -50,10 +50,10 @@ struct FORWARD_UNIT
         // forward1
         if (checkEX1(state)) {
             forward1 = HAZARD_TYPE::EX_HAZ;
-            std::cout << "FORWARD EX\n";
+            std::cout << "FORWARD EX 1\n";
         } else if (checkMEM1(state)) {
             forward1 = HAZARD_TYPE::MEM_HAZ;
-            std::cout << "FORWARD_MEM\n";
+            std::cout << "FORWARD_MEM 1\n";
         } else {
             forward1 = HAZARD_TYPE::NONE;
         }
@@ -61,10 +61,10 @@ struct FORWARD_UNIT
         // forward2
         if (checkEX2(state)) {
             forward2 = HAZARD_TYPE::EX_HAZ;
-            std::cout << "FORWARD_EX\n";
+            std::cout << "FORWARD_EX 2\n";
         } else if (checkMEM2(state)) {
             forward2 = HAZARD_TYPE::MEM_HAZ;
-            std::cout << "FORWARD MEM\n";
+            std::cout << "FORWARD MEM 2\n";
         } else {
             forward2 = HAZARD_TYPE::NONE;
         } 

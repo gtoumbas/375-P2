@@ -166,24 +166,31 @@ void EX(STATE & state)
     // set readReg1
     switch (state.fwd -> forward1) {
         case HAZARD_TYPE::EX_HAZ:
+            std::cout << "TAKE ARG1 from EX " << state.id_ex_stage.decodedInst.instr << "\n";
             state.id_ex_stage.readData1 = state.fwd->ex_value;
             break;
         
-        case HAZARD_TYPE::MEM_HAZ:
+        case HAZARD_TYPE::MEM_HAZ: 
+            std::cout << "TAKE ARG1 from MEM " << state.id_ex_stage.decodedInst.instr << "\n";
             state.id_ex_stage.readData1 = state.fwd->mem_value;
             break;
 
         case HAZARD_TYPE::NONE:
+
+            std::cout << "TAKE ARG1 from REGISTER " << state.id_ex_stage.decodedInst.instr << "\n";
             break;
     }
     // set readReg2
     switch (state.fwd -> forward2) {
         case HAZARD_TYPE::EX_HAZ:
             state.id_ex_stage.readData2 =  state.fwd->ex_value;
+            std::cout << "TAKE ARG2 from EX " << state.id_ex_stage.decodedInst.instr << "\n";
             break;
         
         case HAZARD_TYPE::MEM_HAZ:
             state.id_ex_stage.readData2 = state.fwd->mem_value;
+
+            std::cout << "TAKE ARG2 from MEM " << state.id_ex_stage.decodedInst.instr << "\n";
             break;
 
         case HAZARD_TYPE::NONE:
@@ -192,10 +199,11 @@ void EX(STATE & state)
             } else {
                 state.id_ex_stage.readData2 = state.id_ex_stage.decodedInst.signExtIm;
             }
+
+            std::cout << "TAKE ARG2 from REGISTER " << state.id_ex_stage.decodedInst.instr << "\n";
     }
 
     uint32_t op = state.id_ex_stage.decodedInst.op;
-    std::cout << "Instruction " << op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << state.id_ex_stage.readData1 << " " << state.id_ex_stage.readData2 << "\n";
 
     // DO ALU Operations
     if (op == OP_ZERO) {
@@ -215,7 +223,7 @@ void EX(STATE & state)
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
     // std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
-
+    state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
     state.fwd->ex_value = state.ex_mem_stage.aluResult;
 }
 
@@ -228,17 +236,18 @@ void MEM(STATE & state){
     uint32_t setValue = state.ex_mem_stage.setMemValue;
     uint32_t data;
     
+
     int ret = 0;
     switch(op){
         // Storing
         case OP_SW:
-            ret = mem->setMemValue(addr, setValue, WORD_SIZE); // WRONG
+            ret = mem->setMemValue(addr, setValue, WORD_SIZE); 
             break;
         case OP_SH:
-            ret = mem->setMemValue(addr, instructBits(setValue, 15, 0), HALF_SIZE); // WRONG
+            ret = mem->setMemValue(addr, instructBits(setValue, 31, 16), HALF_SIZE); 
             break;
         case OP_SB:
-            ret = mem->setMemValue(addr, instructBits(setValue, 7, 0), BYTE_SIZE); // WRONG
+            ret = mem->setMemValue(addr, instructBits(setValue, 31, 24), BYTE_SIZE);
             break;
         // Loading
         case OP_LW:
