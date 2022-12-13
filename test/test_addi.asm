@@ -1,3 +1,4 @@
 .set noreorder
-addi $t1, $t0, 5
+addi $t0, $t0, 0x24
+addi $t2, $t0, 0x44
 .word 0xfeedfeed

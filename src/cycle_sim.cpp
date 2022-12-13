@@ -145,8 +145,11 @@ void ID(STATE& state){
     state.hzd -> jump = false;  // erase previously written value 
     state.hzd -> checkHazard(state, decodedInst);
 
-    uint32_t op = decodedInst.op;
-    if(op == OP_BNE || op == OP_BEQ || op == OP_J || op == OP_JAL){ // set inst to zero, because branch or jump is completed
+   // if (state.stall) {
+   //     state.if_id_stage = IF_ID_STAGE{}; // flush or will execute this again
+   // }
+
+    if (state.stall ||JB_OP.count(decodedInst.op) > 0) { // set inst to zero, because branch or jump is completed
         state.id_ex_stage = ID_EX_STAGE{};
         return;
     }
@@ -156,11 +159,6 @@ void ID(STATE& state){
     state.id_ex_stage.readData1 = state.regs[decodedInst.rs];
     state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
     state.id_ex_stage.ctrl = ctrl;
-
-    // flush if stall or will execute this op one more time
-    if (state.stall) {
-        state.if_id_stage = IF_ID_STAGE{};
-    }
 
 }
 
@@ -373,10 +371,7 @@ int main(int argc, char *argv[])
            continue; 
         }
 
-        IF(state);
-                
-
-       // if(state.pc > 32) break;
+        IF(state);        
     }
 
 

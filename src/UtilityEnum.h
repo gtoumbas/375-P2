@@ -91,5 +91,5 @@ std::set<int> VALID_OP = {OP_ZERO, OP_ADDI,  OP_ADDIU, OP_ANDI,  OP_BEQ, OP_BNE,
 std::set<int> I_TYPE_NO_LS = {OP_ADDI,  OP_ADDIU, OP_ANDI,  OP_BEQ, OP_BNE, OP_ORI, OP_SLTI, OP_SLTIU};
 std::set<int> LOAD_OP = {OP_LL, OP_LUI, OP_LW, OP_LHU, OP_LBU};
 std::set<int> STORE_OP = {OP_SB, OP_SC, OP_SH, OP_SW};
-
+std::set<int> JB_OP = {OP_BEQ, OP_BNE, OP_J, OP_JAL};
 #endif
