@@ -61,7 +61,7 @@ void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
         ctrl = CONTROL_STORE;
         return;
     }
-    if (I_TYPE.count(decIns.op) > 0) {
+    if (I_TYPE_NO_LS.count(decIns.op) > 0) {
         ctrl = CONTROL_ITYPE;
         return;
     }
@@ -201,7 +201,7 @@ void EX(STATE & state)
     uint32_t op = state.id_ex_stage.decodedInst.op;
     if (op == OP_ZERO) {
         executor.executeR(state);
-    } else if (I_TYPE.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
+    } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
         executor.executeI(state);
     } // branch and jump finished by this time
 
