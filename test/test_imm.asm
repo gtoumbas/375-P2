@@ -12,9 +12,10 @@ lw $t4, 0($s6) # t4 = 0xbaba
 ori $t5, $t6, 0xffff
 slti $t6, $t7, 0x0
 sltiu $t7, $t8, 10
-sb $v0, 10($v1)
-sh $a0, 10($a1)
-sw $a1, 10($a2)
+# set values of s4, s5, s6
+sb $t3, 0($s4) 
+sh $t0, 0($s5)
+sw $t3, 0($s6)
 .word 0xfeedfeed
 .word 0x12345678
 .word 0xabcdabcd
