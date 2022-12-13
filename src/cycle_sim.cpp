@@ -69,7 +69,7 @@ void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
 }
 
 // Mem helper
-int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint8_t rt)
+int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
 {
     uint32_t value = 0;
     int ret = 0;
@@ -84,13 +84,13 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint8_t rt)
     switch (size)
     {
     case BYTE_SIZE:
-            state.regs[rt] = value & 0xFF;
+            data = value & 0xFF;
             break;
     case HALF_SIZE:
-            state.regs[rt] = value & 0xFFFF;
+            data = value & 0xFFFF;
             break;
     case WORD_SIZE:
-            state.regs[rt] = value;
+            data = value;
             break;
     default:
             std::cerr << "Invalid size passed, cannot read/write memory" << std::endl;
@@ -158,47 +158,53 @@ void ID(STATE& state){
     state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
     state.id_ex_stage.ctrl = ctrl;
 
+    // flush if stall or will execute this op one more time
+    if (state.stall) {
+        state.if_id_stage = IF_ID_STAGE{};
+    }
+
 }
 
 void EX(STATE & state)
 {
-    state.fwd->checkFwd(state);
     uint32_t readData1, readData2; 
     EXECUTOR executor;
 
     // set readReg1
     switch (state.fwd -> forward1) {
         case HAZARD_TYPE::EX_HAZ:
-            readData1 = state.ex_mem_stage.aluResult;
+            state.id_ex_stage.readData1 = state.fwd->ex_value;
             break;
         
         case HAZARD_TYPE::MEM_HAZ:
-            readData1 = state.mem_wb_stage.aluResult;
+            state.id_ex_stage.readData1 = state.fwd->mem_value;
             break;
 
         case HAZARD_TYPE::NONE:
-            readData1 = state.id_ex_stage.readData1;
+            break;
     }
     // set readReg2
     switch (state.fwd -> forward2) {
         case HAZARD_TYPE::EX_HAZ:
-            readData2 =  state.ex_mem_stage.aluResult;
+            state.id_ex_stage.readData2 =  state.fwd->ex_value;
             break;
         
         case HAZARD_TYPE::MEM_HAZ:
-            readData2 = state.mem_wb_stage.aluResult;
+            state.id_ex_stage.readData2 = state.fwd->mem_value;
             break;
 
         case HAZARD_TYPE::NONE:
-            readData2 = state.id_ex_stage.readData2;
+            if (state.id_ex_stage.ctrl.regDst) {
+                state.id_ex_stage.readData2 = state.id_ex_stage.readData2;
+            } else {
+                state.id_ex_stage.readData2 = state.id_ex_stage.decodedInst.signExtIm;
+            }
     }
 
-    // std::cout << "Instruction " << state.id_ex_stage.decodedInst.op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << readData1 << " " << readData2 << "\n";
-    state.id_ex_stage.readData1 = readData1;
-    state.id_ex_stage.readData2 = readData2;
+    uint32_t op = state.id_ex_stage.decodedInst.op;
+    std::cout << "Instruction " << op << " " << state.id_ex_stage.decodedInst.rs << " " << state.id_ex_stage.decodedInst.rt << " "  << state.id_ex_stage.readData1 << " " << state.id_ex_stage.readData2 << "\n";
 
     // DO ALU Operations
-    uint32_t op = state.id_ex_stage.decodedInst.op;
     if (op == OP_ZERO) {
         executor.executeR(state);
     } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
@@ -216,11 +222,12 @@ void EX(STATE & state)
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
     // std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
+
+    state.fwd->ex_value = state.ex_mem_stage.aluResult;
 }
 
 
-void MEM(STATE & state){
-
+void MEM(STATE & state){ 
     uint32_t op = state.ex_mem_stage.decodedInst.op;
     uint32_t rt = state.ex_mem_stage.decodedInst.rt;
     uint32_t addr = state.ex_mem_stage.aluResult;
@@ -231,13 +238,13 @@ void MEM(STATE & state){
     switch(op){
         // Storing
         case OP_SW:
-            ret = mem->setMemValue(addr, rt, WORD_SIZE);
+            ret = mem->setMemValue(addr, rt, WORD_SIZE); // WRONG
             break;
         case OP_SH:
-            ret = mem->setMemValue(addr, rt, HALF_SIZE);
+            ret = mem->setMemValue(addr, rt, HALF_SIZE); // WRONG
             break;
         case OP_SB:
-            ret = mem->setMemValue(addr, rt, BYTE_SIZE);
+            ret = mem->setMemValue(addr, rt, BYTE_SIZE); // WRONG
             break;
         // Loading
         case OP_LW:
@@ -256,7 +263,7 @@ void MEM(STATE & state){
     
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
-    state.mem_wb_stage.data = state.ex_mem_stage.aluResult;
+    state.mem_wb_stage.data = data;
     state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
 }
 
@@ -266,7 +273,11 @@ void WB(STATE & state){
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
     if (state.mem_wb_stage.ctrl.regWrite) {
         state.regs[where] = writeData;
-    } 
+        state.fwd->mem_value = writeData; // forward
+        std::cout << "WB where writeData " << where << " " << writeData << "\n";
+    }
+
+    state.mem_wb_stage.data = writeData; 
 }
 
 
@@ -327,8 +338,11 @@ int main(int argc, char *argv[])
     uint32_t DrainIters = 3;
     while (DrainIters--)
     {
-       printState(state, std::cout, false);
-        
+        printState(state, std::cout, false); 
+        state.cycles++;
+        state.fwd->checkFwd(state);
+
+
         WB(state);
         
         
@@ -350,15 +364,19 @@ int main(int argc, char *argv[])
             state.exception = false;
         }
 
-        
-        if (!state.stall && !state.finish) {
-            IF(state);
-            DrainIters = 3;
+        if (state.finish) {
+            continue;
         }
+
+        ++DrainIters;
+        if (state.stall) {
+           continue; 
+        }
+
+        IF(state);
                 
 
-        state.cycles++;
-        // if(state.pc > 32) break;
+       // if(state.pc > 32) break;
     }
 
 

@@ -40,8 +40,10 @@ struct STATE
 
 struct FORWARD_UNIT 
 {
-    HAZARD_TYPE forward1;
-    HAZARD_TYPE forward2;
+    HAZARD_TYPE forward1 = HAZARD_TYPE::NONE;
+    HAZARD_TYPE forward2 = HAZARD_TYPE::NONE;
+    uint32_t ex_value;
+    uint32_t mem_value;
 
     void checkFwd(STATE& state) 
     {
@@ -273,7 +275,8 @@ struct EXECUTOR
         uint32_t seImm = state.id_ex_stage.decodedInst.signExtIm;
         uint32_t zeImm = imm;
         uint32_t aluResult;
-        uint32_t addr = rs + seImm;
+        uint32_t addr = rs_value + seImm;
+        std::cout << "rs_value, seImm, addr: " << rs_value << " " << seImm << " " << addr << "\n";
 
         int ret = 0;
         uint32_t oldPC = state.id_ex_stage.npc;
@@ -306,7 +309,7 @@ struct EXECUTOR
                 aluResult = addr;
                 break;
             case OP_LUI:
-                aluResult = imm << 16;
+                aluResult = (imm << 16);
                 break;
             case OP_LW:
                 aluResult = addr;
@@ -315,7 +318,7 @@ struct EXECUTOR
                 aluResult = rs_value | zeImm;
                 break;
             case OP_SLTI:
-                if (rs_value >> 31 != seImm >> 31) { // Different signs
+                if ((rs_value >> 31) != (seImm >> 31)) { // Different signs
                     aluResult = (rs_value >> 31) ? 1 : 0; 
                 } else {
                     aluResult = (rs_value < seImm) ? 1 : 0;
