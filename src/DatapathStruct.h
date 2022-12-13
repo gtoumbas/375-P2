@@ -150,7 +150,7 @@ private:
                 // fall through
             case OP_J:
                 jump = true;
-                state.branch_pc = (old_pc & 0xf0000000) | (decodedInst.addr << 2); 
+                state.branch_pc = (old_pc & 0xf0000000) | (decodedInst.addr); 
                 return;
         }
     }
