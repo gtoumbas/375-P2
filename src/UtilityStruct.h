@@ -84,6 +84,7 @@ struct EX_MEM_STAGE{
     DecodedInst decodedInst;
     uint32_t npc; 
     uint32_t aluResult;
+    uint32_t setMemValue;
     CONTROL ctrl;
 };
 

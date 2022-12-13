@@ -97,8 +97,6 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
             return -EINVAL;
     }
 
-
-
     return 0;
 }
 
@@ -223,6 +221,7 @@ void EX(STATE & state)
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
+    state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
     std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
 
     state.fwd->ex_value = state.ex_mem_stage.aluResult;
@@ -234,19 +233,20 @@ void MEM(STATE & state){
     uint32_t rt = state.ex_mem_stage.decodedInst.rt;
     uint32_t addr = state.ex_mem_stage.aluResult;
     uint32_t imm = state.ex_mem_stage.decodedInst.imm;
+    uint32_t setValue = state.ex_mem_stage.setMemValue;
     uint32_t data;
     
     int ret = 0;
     switch(op){
         // Storing
         case OP_SW:
-            ret = mem->setMemValue(addr, rt, WORD_SIZE); // WRONG
+            ret = mem->setMemValue(addr, setValue, WORD_SIZE); // WRONG
             break;
         case OP_SH:
-            ret = mem->setMemValue(addr, rt, HALF_SIZE); // WRONG
+            ret = mem->setMemValue(addr, instructBits(setValue, 15, 0), HALF_SIZE); // WRONG
             break;
         case OP_SB:
-            ret = mem->setMemValue(addr, rt, BYTE_SIZE); // WRONG
+            ret = mem->setMemValue(addr, instructBits(setValue, 7, 0), BYTE_SIZE); // WRONG
             break;
         // Loading
         case OP_LW:
