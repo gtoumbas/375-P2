@@ -80,7 +80,6 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
             return ret;
     }
 
-    std::cout << "DO LOAD: " << addr << " " << value << " " << size << "\n";
     switch (size)
     {
     case BYTE_SIZE:
@@ -221,12 +220,7 @@ void EX(STATE & state)
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
-<<<<<<< HEAD
-    state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
-    std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
-=======
     // std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
->>>>>>> e06d762af1c58491373823b3fb6fa48ec3bcd958
 
     state.fwd->ex_value = state.ex_mem_stage.aluResult;
 }
