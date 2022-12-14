@@ -6,6 +6,10 @@
 
 using byte_t = uint32_t;
 
+enum CACHE_RET {
+    HIT, MISS
+}
+
 struct Block {
 	uint32_t tag;
 	uint32_t lastUsed;
@@ -33,76 +37,38 @@ private:
 	uint32_t getOffset(uint32_t addr) {
 		return (addr << (32 - offset_bits)) >> (32 - offset_bits);
 	}
-	// evicts a block from the cache, returns the index of the evicted block - cache[i][return_value]
-	uint32_t evict(uint32_t addr) {
-		auto index = getIndex(addr), off = getOffset(addr);
+
+    uint32_t evict(uint32_t addr) {
+		uint32_t index, offset;
+        index = getIndex(addr);
+        offset = getOffset(addr);
 		uint32_t ret = 0, last = UINT32_MAX;
 
+        // find a free spot or evict LRU cacheline
 		for (uint32_t i = 0; i < n; ++i) {
-			if (!cache[index][i].valid) {	// cache[index] has invalid block -> evict it
+            // if invalid, break
+			if (!cache[index][i].valid) {	
 				ret = i;
 				break;
 			} 
+            // update lru
 			if (cache[index][i].lastUsed < last) {
 				ret = i;
 				last = cache[index][i].lastUsed;
 			}
 		}
+
 		// write-back for the evicted block	
+        cache[index][ret].valid = false;
 		if (cache[index][ret].dirty) {
 			for (uint32_t i = 0; i < cfg.blockSize; ++i) {
-				mem->setMemValue(addr - off + i, cache[index][ret].data[i], BYTE_SIZE);
+				mem->setMemValue(addr - offset + i, cache[index][ret].data[i], BYTE_SIZE);
 			}
 		}
+
 		return ret;
 	}
 
-	// brings block from memory and put it in the cache. Return the index of the evicted block - cache[i][return_value]
-	uint32_t bringFromMemory(uint32_t addr) {
-		auto index = getIndex(addr), off = getOffset(addr), where = evict(addr);
-		Block newBlock {getTag(addr), ++use_counter, true, false, std::vector<byte_t>(cfg.blockSize)};
-		for (uint32_t i = 0; i < cfg.blockSize; ++i) {
-			mem -> getMemValue(addr - off + i, newBlock.data[i], BYTE_SIZE);
-		}
-		cache[index][where] = newBlock;
-		return where;
-	}
-
-
-	byte_t getByte(uint32_t addr) {
-		auto tag = getTag(addr), index = getIndex(addr), off = getOffset(addr);
-		// check blocks at the given index
-		for (uint32_t i = 0; i < n; ++i) {
-			if (cache[index][i].tag == tag && cache[index][i].valid) { 
-				++hits;
-				cache[index][i].lastUsed = ++use_counter; // hit
-				return cache[index][i].data[off];
-			} 
-		}
-		// miss
-		++miss;
-		auto where = bringFromMemory(addr);
-		return cache[index][where].data[off];
-	}
-
-	void setByte(uint32_t addr, byte_t value) {
-		auto tag = getTag(addr), index = getIndex(addr), off = getOffset(addr);
-		// check blocks at the given index
-		for (uint32_t i = 0; i < n; ++i) {
-			if (cache[index][i].tag == tag && cache[index][i].valid) { 
-					hits++;	
-					cache[index][i].lastUsed = ++use_counter; // hit
-					cache[index][i].data[off] = value;
-					cache[index][i].dirty = true;
-					return;
-			} 
-		}
-		// miss
-		miss++;
-		auto where = bringFromMemory(addr);
-		cache[index][where].data[off] = value;
-		cache[index][where].dirty = true;
-	}
 public:
 	Cache(const CacheConfig& cfg, MemoryStore* mem): cfg(cfg),  mem(mem) {
 		n = (cfg.type == DIRECT_MAPPED) ? 1 : 2;
@@ -119,20 +85,82 @@ public:
 		}
 	}
 
-	uint32_t getCacheValue(uint32_t addr, uint32_t& value, MemEntrySize size) {
-		value = 0;
-		for (int i = 0; i < size; ++i) {
-			value <<= 8;
-			value += getByte(addr + i);
-		}
-		return value;
-	}
+	int getCacheValue(uint32_t addr, uint32_t& value, MemEntrySize size) {
+        uint32_t tag, index, offset;
+        tag = getTag(addr);
+        index = getIndex(addr);
+        offset = getOffset(offset);
 
-	void setCacheValue(uint32_t addr, uint32_t value, MemEntrySize size) {
-		for (int i = 0; i < size; ++i) {
-			setByte(addr + i, (value << (8 * i)) >> (8 * size));
-		}
-	}
+        // go to cache[index] and find correspoding tag
+        value = 0;
+        bool hit = false;
+        for (int i = 0; i < n; ++i) {
+            // if hit: 1) update lru counter 2) record the value 3) return HIT
+            if (cache[index][i].tag == tag && cache[index][i].valid) {
+                cache[index][i].lastUsed = ++use_counter;      
+                hit = true;
+                ++hits;
+            }
+        }
+        // if miss: 1) find free spot or evict 2) bring data from memory 3) update block values 4) return MISS
+        if (!hit) {
+            whereToPut = evict(address);
+            cache[index][whereToPut].tag = tag;
+            cache[index][whereToPut].lastUsed = ++use_counter;
+            cache[index][whereToPut].valid = true;
+            cache[index][whereToPut].dirty = false;
+            for (uint32_t i = 0; i < cfg.blockSize; ++i) {
+                mem->getMemValue(addr - offset + i, cache[index][whereToPut].data[i], BYTE_SIZE);
+            }
+            ++miss;
+        }
+
+        // read and return
+        for (int j = 0; j < size; ++j) {
+                value <<= 8;
+                value += cache[index][i].data[offset + j]; // [0]...[offset+0][offset+1][offset+2][offset+3]...[block_size - 1]
+        }
+        return (hit) ? CACHE_RET::HIT : CACHE_RET::MISS;
+    }
+
+	int setCacheValue(uint32_t addr, uint32_t value, MemEntrySize size) {
+        uint32_t tag, index, offset;
+        tag = getTag(addr);
+        index = getIndex(addr);
+        offset = getOffset(offset);
+        bool hit = false;
+        for (int i = 0; i < n; ++i) {
+            // if hit: 1) update use_counter 2) set value 3) set dirty 4) return HIT
+            if (cache[index][i].tag == tag && cache[index][i].valid) {
+                hit = true;
+                cache[index][i].lastUsed = ++use_counter;      
+                cache[index][i].dirty = true;
+                ++hits;
+            }
+        }
+
+        // if miss: 1) find free spot or evict 2) bring from memory 3) update block values 4) set 5) return MISS
+
+        if (!hit) {
+            whereToPut = evict(address);
+            cache[index][whereToPut].tag = tag;
+            cache[index][whereToPut].lastUsed = ++use_counter;
+            cache[index][whereToPut].valid = true;
+            cache[index][whereToPut].dirty = true;
+            for (uint32_t i = 0; i < cfg.blockSize; ++i) {
+                mem->getMemValue(addr - offset + i, cache[index][whereToPut].data[i], BYTE_SIZE);
+            }
+            ++miss;
+        }
+
+        // set and return
+        for (int j = 0; j < size; ++j) {
+            byte_val = ((val << (32 - 8 * size + 8 * j)) >> 24); // V = V_1V_2V_3V_4          
+            cache[index][i].data[offset + j] = byte_val;         // [0]...[offset+0] = V1 [offset+1] = V2 [offset+2] = V3 [offset+3] = V4...[block_size - 1]
+        }
+    
+        return (hit) ? CACHE_RET::HIT ? CACHE_RET::MISS;
+    }
 
 	uint32_t getHits() {
 		return hits;
