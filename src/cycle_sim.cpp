@@ -357,7 +357,7 @@ int main(int argc, char *argv[])
         EX(state);
         // Arithmetic overflow
         if (state.exception) {
-            state.pc = state.branch_pc;
+            state.pc = state.branch_pc - 4;
             state.exception = false;
         }
 
@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
 
         // Illegal Instruction
         if (state.exception) {
-            state.pc = state.branch_pc;
+            state.pc = state.branch_pc - 4;
             state.exception = false;
         }
 
