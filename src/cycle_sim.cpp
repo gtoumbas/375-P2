@@ -141,7 +141,7 @@ void ID(STATE& state){
     state.hzd -> jump = false;  // erase previously written value 
     state.hzd -> checkHazard(state, decodedInst);
     // if state.stall = true: this might be because 1) load_use   2) if not load_use, then it is branch register forwarding issue
-    // have to flush if_id_stage and not execute IF() in this iteration (the pc will stay the same in the next iteration)
+    // have to flush id_ex_stage and not execute IF() in this iteration (the pc will stay the same in the next iteration)
     // also if op was branch or jump do not push it forward (exception: JAL)
     if (state.stall || JB_OP.count(decodedInst.op) > 0) {
         state.id_ex_stage = ID_EX_STAGE{};
