@@ -197,39 +197,41 @@ private:
             return;
         }
 
-        // do forwarding
-        switch (state.branch_fwd -> fwd1) {
-            case BRANCH_EX_HAZ:         // cant be load, because loaduse would handle this. 1 stall and fwd
-                state.stall = true;
-                return;
-            case BRANCH_MEM_HAZ:        // no stalls, fwd
-                readReg1 = state.branch_fwd -> mem_value;
-                break;
-            case BRANCH_LOAD_MEM_HAZ:   // 1 stall and fwd
-                state.stall = true;
-                return;
-            case BRANCH_WB_HAZ:         // no stall, fwd 
-                readReg1 = state.branch_fwd -> wb_value;
-                break;
-            default:
-                readReg1 = state.regs[decodedInst.rs];
-        }
-        // do forwarding
-        switch (state.branch_fwd -> fwd2) {
-            case BRANCH_EX_HAZ:
-                state.stall = true;
-                return;
-            case BRANCH_MEM_HAZ:
-                readReg2 = state.branch_fwd -> mem_value;
-                break;
-            case BRANCH_LOAD_MEM_HAZ:
-                state.stall = true;
-                return;
-            case BRANCH_WB_HAZ:
-                readReg2 = state.branch_fwd -> wb_value;
-                break;
-            default:
-                readReg2 = state.regs[decodedInst.rt];
+        // do forwarding if op = BEQ or BNE
+        if (op == OP_BNE || op == OP_BEQ) {
+            switch (state.branch_fwd -> fwd1) {
+                case BRANCH_EX_HAZ:         // cant be load, because loaduse would handle this. 1 stall and fwd
+                    state.stall = true;
+                    return;
+                case BRANCH_MEM_HAZ:        // no stalls, fwd
+                    readReg1 = state.branch_fwd -> mem_value;
+                    break;
+                case BRANCH_LOAD_MEM_HAZ:   // 1 stall and fwd
+                    state.stall = true;
+                    return;
+                case BRANCH_WB_HAZ:         // no stall, fwd 
+                    readReg1 = state.branch_fwd -> wb_value;
+                    break;
+                default:
+                    readReg1 = state.regs[decodedInst.rs];
+            }
+            // do forwarding
+            switch (state.branch_fwd -> fwd2) {
+                case BRANCH_EX_HAZ:
+                    state.stall = true;
+                    return;
+                case BRANCH_MEM_HAZ:
+                    readReg2 = state.branch_fwd -> mem_value;
+                    break;
+                case BRANCH_LOAD_MEM_HAZ:
+                    state.stall = true;
+                    return;
+                case BRANCH_WB_HAZ:
+                    readReg2 = state.branch_fwd -> wb_value;
+                    break;
+                default:
+                    readReg2 = state.regs[decodedInst.rt];
+            }
         }
 
         switch (op) {
