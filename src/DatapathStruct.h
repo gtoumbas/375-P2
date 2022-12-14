@@ -163,6 +163,7 @@ struct HAZARD_UNIT
             checkLoadUse(state);
         } else {                // check jump or branch: op = J, JAL, BEQ, BNE
             checkBranch(state, decodedInst);
+            std::cout << "EXITING checkHazard()\n";
         }
     }
 

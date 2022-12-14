@@ -145,7 +145,7 @@ void ID(STATE& state){
     // also if op was branch or jump do not push it forward (exception: JAL)
     if (state.stall || JB_OP.count(decodedInst.op) > 0) {
         state.id_ex_stage = ID_EX_STAGE{};
-        state.if_id_stage = IF_ID_STAGE{};
+        std::cout << "STALLING IN ID()\n";
         return;
     }
 
@@ -360,6 +360,7 @@ int main(int argc, char *argv[])
         EX(state);
         // Arithmetic overflow
         if (state.exception) {
+            std::cout << "EXCEPTION\n";
             state.pc = state.branch_pc;
             state.exception = false;
         }
@@ -368,6 +369,7 @@ int main(int argc, char *argv[])
 
         // Illegal Instruction
         if (state.exception) {
+            std::cout << "EXCEPTION\n";
             state.pc = state.branch_pc;
             state.exception = false;
         }

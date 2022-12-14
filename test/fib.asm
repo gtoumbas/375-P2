@@ -12,7 +12,7 @@ loop: lw   $t3, 0($t0)      # Get value from array F[n]
       sw   $t2, 8($t0)      # Store F[n+2] = F[n] + F[n+1] in array
       addi $t0, $t0, 4      # increment address of Fib. number source
       addi $t1, $t1, -1     # decrement loop counter
-      bgtz $t1, loop        # repeat if not finished yet.
+      bne $t1, $zero, loop        # repeat if not finished yet.
       .word 0xfeedfeed
       .word 0x0             # size of "array"
       .word 0x0             # size of "array"
