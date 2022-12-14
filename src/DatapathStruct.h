@@ -132,7 +132,7 @@ private:
 
     void checkMEM(STATE &state, DecodedInst& decodedInst) { // example: add $t1, ... -> nop -> beq $t1, $t0 -> forward form ex/mem to if/id
         uint32_t where = (state.ex_mem_stage.ctrl.regDst) ? state.ex_mem_stage.decodedInst.rd : state.ex_mem_stage.decodedInst.rt;
-        if (!state.ex_mem_stage.ctrl.regWrite || where == 0) {
+        if (state.ex_mem_stage.ctrl.memRead || !state.ex_mem_stage.ctrl.regWrite || where == 0) {
             return;
         }
         // check that there is no such op between this and branch
