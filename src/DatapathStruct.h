@@ -246,7 +246,7 @@ private:
                 state.branch_pc = old_pc + (decodedInst.signExtIm << 2);
                 return;
             case OP_JAL:
-                state.regs[REG_RA] = old_pc + 4; // not +8 because PC is incremented in the IF()
+                // state.regs[REG_RA] = old_pc + 4; // not +8 because PC is incremented in the IF()
                 // fall through
             case OP_J:
                 jump = true;

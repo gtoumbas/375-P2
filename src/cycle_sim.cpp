@@ -144,7 +144,7 @@ void ID(STATE& state){
     // if state.stall = true: this might be because 1) load_use   2) if not load_use, then it is branch register forwarding issue
     // have to flush id_ex_stage and not execute IF() in this iteration (the pc will stay the same in the next iteration)
     // also if op was branch or jump do not push it forward (exception: JAL)
-    if (state.stall || JB_OP.count(decodedInst.op) > 0) {
+    if (state.stall || (JB_OP.count(decodedInst.op) > 0 && decodedInst.op != OP_JAL)){
         state.id_ex_stage = ID_EX_STAGE{};
         std::cout << "STALLING IN ID()\n";
         return;
@@ -271,17 +271,24 @@ void MEM(STATE & state){
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
     state.mem_wb_stage.data = data;
     state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
+    state.mem_wb_stage.npc = state.ex_mem_stage.npc;
 }
 
 
 void WB(STATE & state){
     uint32_t writeData = (state.mem_wb_stage.ctrl.memToReg) ? state.mem_wb_stage.data : state.mem_wb_stage.aluResult;
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
+    uint32_t op = state.mem_wb_stage.decodedInst.op;
     if (state.mem_wb_stage.ctrl.regWrite) {
         state.regs[where] = writeData;
         // forward values 
         state.fwd->wb_value = writeData;        
         state.branch_fwd->wb_value = writeData; 
+    }
+
+    // JAL write reg
+    if (op == OP_JAL){
+        state.regs[REG_RA] = state.mem_wb_stage.npc + 4;
     }
 
     state.mem_wb_stage.data = writeData; 

@@ -90,6 +90,7 @@ struct EX_MEM_STAGE{
 struct MEM_WB_STAGE{
     DecodedInst decodedInst;
     uint32_t aluResult;
+    uint32_t npc;
     uint32_t data; 
     CONTROL ctrl;
 };
