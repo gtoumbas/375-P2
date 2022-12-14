@@ -8,7 +8,7 @@ using byte_t = uint32_t;
 
 enum CACHE_RET {
     HIT, MISS
-}
+};
 
 struct Block {
 	uint32_t tag;
@@ -93,6 +93,7 @@ public:
 
         // go to cache[index] and find correspoding tag
         value = 0;
+        uint32_t whereToPut;
         bool hit = false;
         for (int i = 0; i < n; ++i) {
             // if hit: 1) update lru counter 2) record the value 3) return HIT
@@ -100,11 +101,12 @@ public:
                 cache[index][i].lastUsed = ++use_counter;      
                 hit = true;
                 ++hits;
+                whereToPut = i;
             }
         }
         // if miss: 1) find free spot or evict 2) bring data from memory 3) update block values 4) return MISS
         if (!hit) {
-            whereToPut = evict(address);
+            whereToPut = evict(addr);
             cache[index][whereToPut].tag = tag;
             cache[index][whereToPut].lastUsed = ++use_counter;
             cache[index][whereToPut].valid = true;
@@ -118,7 +120,7 @@ public:
         // read and return
         for (int j = 0; j < size; ++j) {
                 value <<= 8;
-                value += cache[index][i].data[offset + j]; // [0]...[offset+0][offset+1][offset+2][offset+3]...[block_size - 1]
+                value += cache[index][whereToPut].data[offset + j]; // [0]...[offset+0][offset+1][offset+2][offset+3]...[block_size - 1]
         }
         return (hit) ? CACHE_RET::HIT : CACHE_RET::MISS;
     }
@@ -129,6 +131,7 @@ public:
         index = getIndex(addr);
         offset = getOffset(offset);
         bool hit = false;
+        uint32_t whereToPut;
         for (int i = 0; i < n; ++i) {
             // if hit: 1) update use_counter 2) set value 3) set dirty 4) return HIT
             if (cache[index][i].tag == tag && cache[index][i].valid) {
@@ -136,13 +139,14 @@ public:
                 cache[index][i].lastUsed = ++use_counter;      
                 cache[index][i].dirty = true;
                 ++hits;
+                whereToPut = i;
             }
         }
 
         // if miss: 1) find free spot or evict 2) bring from memory 3) update block values 4) set 5) return MISS
 
         if (!hit) {
-            whereToPut = evict(address);
+            whereToPut = evict(addr);
             cache[index][whereToPut].tag = tag;
             cache[index][whereToPut].lastUsed = ++use_counter;
             cache[index][whereToPut].valid = true;
@@ -155,11 +159,11 @@ public:
 
         // set and return
         for (int j = 0; j < size; ++j) {
-            byte_val = ((val << (32 - 8 * size + 8 * j)) >> 24); // V = V_1V_2V_3V_4          
-            cache[index][i].data[offset + j] = byte_val;         // [0]...[offset+0] = V1 [offset+1] = V2 [offset+2] = V3 [offset+3] = V4...[block_size - 1]
+            byte_t byte_val = ((value << (32 - 8 * size + 8 * j)) >> 24); // V = V_1V_2V_3V_4          
+            cache[index][whereToPut].data[offset + j] = byte_val;         // [0]...[offset+0] = V1 [offset+1] = V2 [offset+2] = V3 [offset+3] = V4...[block_size - 1]
         }
     
-        return (hit) ? CACHE_RET::HIT ? CACHE_RET::MISS;
+        return (hit) ? CACHE_RET::HIT : CACHE_RET::MISS;
     }
 
 	uint32_t Hits() {
