@@ -7,6 +7,7 @@
 #include "RegisterInfo.h"
 #include "EndianHelpers.h"
 #include "DatapathStruct.h"
+#include "Cache.h"
 #include<set>
 
 #define END 0xfeedfeed
