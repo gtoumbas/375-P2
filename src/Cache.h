@@ -162,11 +162,14 @@ public:
         return (hit) ? CACHE_RET::HIT ? CACHE_RET::MISS;
     }
 
-	uint32_t getHits() {
+	uint32_t Hits() {
 		return hits;
 	}
-	uint32_t getMisses() {
+	uint32_t Misses() {
 		return miss;
 	}
+    uint32_t Penalty() {
+        return cfg.missLatency;
+    }
 };
 
