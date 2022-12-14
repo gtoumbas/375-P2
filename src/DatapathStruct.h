@@ -83,7 +83,7 @@ private:
             fwdWriteStore = HAZARD_TYPE::NONE;
             return;
         }
-        fwdWriteStore = (where == state.ex_mem_stage.decodedInst.rs) ? HAZARD_TYPE::WRITE_STORE_HAZ : HAZARD_TYPE::NONE;
+        fwdWriteStore = (where == state.ex_mem_stage.decodedInst.rt) ? HAZARD_TYPE::WRITE_STORE_HAZ : HAZARD_TYPE::NONE;
     }
 
 };
@@ -375,7 +375,6 @@ struct EXECUTOR
         uint32_t zeImm = imm;
         uint32_t aluResult;
         uint32_t addr = rs_value + seImm;
-        std::cout << "rs_value, seImm, addr: " << rs_value << " " << seImm << " " << addr << "\n";
 
         int ret = 0;
         uint32_t oldPC = state.id_ex_stage.npc;
