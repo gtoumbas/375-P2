@@ -1,6 +1,5 @@
 #include <stdint.h>
 
-
 struct CONTROL 
 {
     bool regDst;

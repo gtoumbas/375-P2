@@ -32,7 +32,6 @@ struct STATE
     HAZARD_UNIT*  hzd;
     EXECUTOR* exec;
     bool stall;
-    bool delay;
     bool exception;
     bool finish; 
 };

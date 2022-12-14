@@ -106,9 +106,10 @@ void IF(STATE & state){
     uint32_t instr = 0;
 
     // mux. if control_hazard.branch asserted, then jump to new address
-    if (state.hzd -> jump) {
-        state.pc = state.branch_pc;
-    } 
+   // if (state.hzd -> jump && state.delaySlot) {
+    //    state.pc = state.branch_pc;
+    //    state.delaySlot = false;
+    //} 
 
     // fetch instruction
     mem->getMemValue(state.pc, instr, WORD_SIZE);
@@ -118,7 +119,8 @@ void IF(STATE & state){
     state.if_id_stage.npc = state.pc + 4;
 
     // increment pc
-    state.pc += 4;
+
+    state.pc = (state.hzd -> jump) ? state.branch_pc : state.pc + 4;
 }
 
 
@@ -372,7 +374,7 @@ int main(int argc, char *argv[])
         }
 
         ++DrainIters;
-        if (state.stall) {
+        if (state.stall) { 
            continue; 
         }
 
