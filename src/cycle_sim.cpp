@@ -7,7 +7,6 @@
 #include "RegisterInfo.h"
 #include "EndianHelpers.h"
 #include "DatapathStruct.h"
-#include "Cache.h"
 #include<set>
 
 #define END 0xfeedfeed
@@ -43,6 +42,11 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 
 
 void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
+    // End of program check
+    if (decIns.instr == 0xfeedfeed) {
+        ctrl = CONTROL_NOP;
+        return;
+    }
 
     if (VALID_OP.count(decIns.op) == 0) { // ILLEGAL_INST
         state.exception = true;
@@ -105,8 +109,10 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
 void IF(STATE & state){
     uint32_t instr = 0;
     
-    // fetch instruction
-    mem->getMemValue(state.pc, instr, WORD_SIZE);
+    // fetch instruction if 0xfeedfeed has not been reached 
+    if (!state.finish){
+        mem->getMemValue(state.pc, instr, WORD_SIZE);
+    }
     
     // Update state
     state.if_id_stage.instr = instr;
@@ -124,8 +130,8 @@ void ID(STATE& state){
     uint32_t instr = state.if_id_stage.instr;
     if (instr == 0xfeedfeed) {
         state.finish = true;
-        state.id_ex_stage = ID_EX_STAGE{};
-        return;
+        // state.id_ex_stage = ID_EX_STAGE{};
+        // return;
     }
     DecodedInst decodedInst;
     CONTROL ctrl;
@@ -138,9 +144,10 @@ void ID(STATE& state){
         // Don't need to squash because not truly parallel
         return;
     }
-
-    state.hzd -> jump = false;  // erase previously written value 
-    state.hzd -> checkHazard(state, decodedInst);
+    if (!state.finish) {
+        state.hzd -> jump = false;  // erase previously written value 
+        state.hzd -> checkHazard(state, decodedInst);
+    }
     // if state.stall = true: this might be because 1) load_use   2) if not load_use, then it is branch register forwarding issue
     // have to flush id_ex_stage and not execute IF() in this iteration (the pc will stay the same in the next iteration)
     // also if op was branch or jump do not push it forward (exception: JAL)
@@ -197,11 +204,13 @@ void EX(STATE & state)
     uint32_t op = state.id_ex_stage.decodedInst.op;
 
     // DO ALU Operations
-    if (op == OP_ZERO) {
-        executor.executeR(state);
-    } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
-        executor.executeI(state);
-    } // branch and jump finished by this time
+    if (state.id_ex_stage.decodedInst.instr != 0xfeedfeed) {
+        if (op == OP_ZERO) {
+            executor.executeR(state);
+        } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
+            executor.executeI(state);
+        } // branch and jump finished by this time
+    }
 
     if (state.exception) {
         state.branch_pc = EXCEPTION_ADDR; 
@@ -239,32 +248,33 @@ void MEM(STATE & state){
         case HAZARD_TYPE::NONE:
             setValue = state.ex_mem_stage.setMemValue;
     }
-
-
-    switch(op){
-        // Storing
-        case OP_SW:
-            ret = mem->setMemValue(addr, setValue, WORD_SIZE); 
-            break;
-        case OP_SH:
-            ret = mem->setMemValue(addr, instructBits(setValue, 31, 16), HALF_SIZE); 
-            break;
-        case OP_SB:
-            ret = mem->setMemValue(addr, instructBits(setValue, 31, 24), BYTE_SIZE);
-            break;
-        // Loading
-        case OP_LW:
-            ret = doLoad(state, addr, WORD_SIZE, data);
-            break;
-        case OP_LHU:
-            ret = doLoad(state, addr, HALF_SIZE, data);
-            break;
-        case OP_LBU:
-            ret = doLoad(state, addr, BYTE_SIZE, data);
-            break;
-        // Default
-        default:
-            data = state.ex_mem_stage.aluResult;
+    
+    if (state.ex_mem_stage.decodedInst.instr != 0xfeedfeed) {
+        switch(op){
+            // Storing
+            case OP_SW:
+                ret = mem->setMemValue(addr, setValue, WORD_SIZE); 
+                break;
+            case OP_SH:
+                ret = mem->setMemValue(addr, instructBits(setValue, 31, 16), HALF_SIZE); 
+                break;
+            case OP_SB:
+                ret = mem->setMemValue(addr, instructBits(setValue, 31, 24), BYTE_SIZE);
+                break;
+            // Loading
+            case OP_LW:
+                ret = doLoad(state, addr, WORD_SIZE, data);
+                break;
+            case OP_LHU:
+                ret = doLoad(state, addr, HALF_SIZE, data);
+                break;
+            case OP_LBU:
+                ret = doLoad(state, addr, BYTE_SIZE, data);
+                break;
+            // Default
+            default:
+                data = state.ex_mem_stage.aluResult;
+        }
     }
     
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
@@ -276,6 +286,11 @@ void MEM(STATE & state){
 
 
 void WB(STATE & state){
+    // Check for 0xfeefeed
+    if (state.mem_wb_stage.decodedInst.instr == 0xfeedfeed) {
+        return;
+    }
+
     uint32_t writeData = (state.mem_wb_stage.ctrl.memToReg) ? state.mem_wb_stage.data : state.mem_wb_stage.aluResult;
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
     uint32_t op = state.mem_wb_stage.decodedInst.op;
@@ -361,7 +376,7 @@ int main(int argc, char *argv[])
 
         WB(state);
         
-        
+
         MEM(state);
         
         
@@ -382,16 +397,18 @@ int main(int argc, char *argv[])
             state.exception = false;
         }
 
+
         if (state.finish) {
+            IF(state);
             continue;
         }
+
 
         ++DrainIters;
         if (state.stall) { 
            continue; 
         }
-
-        IF(state);        
+        IF(state);
     }
 
 
