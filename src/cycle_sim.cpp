@@ -104,13 +104,7 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
 // *------------------------------------------------------------*
 void IF(STATE & state){
     uint32_t instr = 0;
-
-    // mux. if control_hazard.branch asserted, then jump to new address
-   // if (state.hzd -> jump && state.delaySlot) {
-    //    state.pc = state.branch_pc;
-    //    state.delaySlot = false;
-    //} 
-
+    
     // fetch instruction
     mem->getMemValue(state.pc, instr, WORD_SIZE);
     
@@ -146,8 +140,10 @@ void ID(STATE& state){
 
     state.hzd -> jump = false;  // erase previously written value 
     state.hzd -> checkHazard(state, decodedInst);
-
-    if (state.stall ||JB_OP.count(decodedInst.op) > 0) { // set inst to zero, because branch or jump is completed
+    // if state.stall = true: this might be because 1) load_use   2) if not load_use, then it is branch register forwarding issue
+    // have to flush if_id_stage and not execute IF() in this iteration (the pc will stay the same in the next iteration)
+    // also if op was branch or jump do not push it forward (exception: JAL)
+    if (state.stall || JB_OP.count(decodedInst.op) > 0) {
         state.id_ex_stage = ID_EX_STAGE{};
         return;
     }
@@ -166,33 +162,26 @@ void EX(STATE & state)
     EXECUTOR executor;
 
     // set readReg1
-    switch (state.fwd -> forward1) {
-        case HAZARD_TYPE::EX_HAZ:
-            std::cout << "TAKE ARG1 from EX " << state.id_ex_stage.decodedInst.instr << "\n";
-            state.id_ex_stage.readData1 = state.fwd->ex_value;
+    switch (state.fwd -> fwd1) {
+        case HAZARD_TYPE::MEM_HAZ:  // example: add $t1, ... (in MEM now)-> add $t0, $t1, $t1 (in EX now): 
+            state.id_ex_stage.readData1 = state.fwd->mem_value;
             break;
         
-        case HAZARD_TYPE::MEM_HAZ: 
-            std::cout << "TAKE ARG1 from MEM " << state.id_ex_stage.decodedInst.instr << "\n";
-            state.id_ex_stage.readData1 = state.fwd->mem_value;
+        case HAZARD_TYPE::WB_HAZ: // example: add $t1, ... (in WB now)-> nop -> add $t0, $t1, $t1 (in EX now): 
+            state.id_ex_stage.readData1 = state.fwd->wb_value;
             break;
 
         case HAZARD_TYPE::NONE:
-
-            std::cout << "TAKE ARG1 from REGISTER " << state.id_ex_stage.decodedInst.instr << "\n";
             break;
     }
     // set readReg2
-    switch (state.fwd -> forward2) {
-        case HAZARD_TYPE::EX_HAZ:
-            state.id_ex_stage.readData2 =  state.fwd->ex_value;
-            std::cout << "TAKE ARG2 from EX " << state.id_ex_stage.decodedInst.instr << "\n";
+    switch (state.fwd -> fwd2) {
+        case HAZARD_TYPE::MEM_HAZ:
+            state.id_ex_stage.readData2 =  state.fwd->mem_value;
             break;
         
-        case HAZARD_TYPE::MEM_HAZ:
-            state.id_ex_stage.readData2 = state.fwd->mem_value;
-
-            std::cout << "TAKE ARG2 from MEM " << state.id_ex_stage.decodedInst.instr << "\n";
+        case HAZARD_TYPE::WB_HAZ:
+            state.id_ex_stage.readData2 = state.fwd->wb_value;
             break;
 
         case HAZARD_TYPE::NONE:
@@ -201,8 +190,6 @@ void EX(STATE & state)
             } else {
                 state.id_ex_stage.readData2 = state.id_ex_stage.decodedInst.signExtIm;
             }
-
-            std::cout << "TAKE ARG2 from REGISTER " << state.id_ex_stage.decodedInst.instr << "\n";
     }
 
     uint32_t op = state.id_ex_stage.decodedInst.op;
@@ -224,9 +211,11 @@ void EX(STATE & state)
     state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
-    // std::cout << "ALU RESULT: " << state.ex_mem_stage.aluResult << "\n";
     state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
-    state.fwd->ex_value = state.ex_mem_stage.aluResult;
+    
+    // forward values
+    state.fwd->mem_value = state.ex_mem_stage.aluResult;
+    state.branch_fwd->mem_value = state.ex_mem_stage.aluResult;
 }
 
 
@@ -235,11 +224,20 @@ void MEM(STATE & state){
     uint32_t rt = state.ex_mem_stage.decodedInst.rt;
     uint32_t addr = state.ex_mem_stage.aluResult;
     uint32_t imm = state.ex_mem_stage.decodedInst.imm;
-    uint32_t setValue = state.ex_mem_stage.setMemValue;
+    uint32_t setValue;
     uint32_t data;
-    
-
     int ret = 0;
+
+    // sw $t0, addr: t0 may be forwarded by the instruction in WB
+    switch (state.fwd -> fwdWriteStore) {
+        case HAZARD_TYPE::WRITE_STORE_HAZ:
+            setValue = state.fwd -> wb_value;
+            break;
+        case HAZARD_TYPE::NONE:
+            setValue = state.ex_mem_stage.setMemValue;
+    }
+
+
     switch(op){
         // Storing
         case OP_SW:
@@ -278,8 +276,9 @@ void WB(STATE & state){
     uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
     if (state.mem_wb_stage.ctrl.regWrite) {
         state.regs[where] = writeData;
-        state.fwd->mem_value = writeData; // forward
-        std::cout << "WB where writeData " << where << " " << writeData << "\n";
+        // forward values 
+        state.fwd->wb_value = writeData;        
+        state.branch_fwd->wb_value = writeData; 
     }
 
     state.mem_wb_stage.data = writeData; 
@@ -328,6 +327,7 @@ int main(int argc, char *argv[])
     state.exec = new EXECUTOR{};
     state.hzd = new HAZARD_UNIT{};
     state.fwd = new FORWARD_UNIT{};
+    state.branch_fwd = new BRANCH_FORWARD_UNIT{};
     
     for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
 
@@ -345,8 +345,9 @@ int main(int argc, char *argv[])
     {
         printState(state, std::cout, false); 
         state.cycles++;
+        // forwarding units
         state.fwd->checkFwd(state);
-
+        state.branch_fwd->checkFwd(state);
 
         WB(state);
         
