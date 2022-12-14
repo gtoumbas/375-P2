@@ -141,6 +141,7 @@ void ID(STATE& state){
 
     if (state.exception) {
         state.branch_pc = EXCEPTION_ADDR;
+        // Don't need to squash because not truly parallel
         return;
     }
 
@@ -357,7 +358,7 @@ int main(int argc, char *argv[])
         EX(state);
         // Arithmetic overflow
         if (state.exception) {
-            state.pc = state.branch_pc - 4;
+            state.pc = state.branch_pc;
             state.exception = false;
         }
 
@@ -365,7 +366,7 @@ int main(int argc, char *argv[])
 
         // Illegal Instruction
         if (state.exception) {
-            state.pc = state.branch_pc - 4;
+            state.pc = state.branch_pc;
             state.exception = false;
         }
 
