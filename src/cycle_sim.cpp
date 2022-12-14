@@ -14,10 +14,14 @@
 
 static MemoryStore* mem;
 
+// Global State variable
+STATE state;
+
+
 extern void dumpRegisterStateInternal(RegisterInfo & reg, std::ostream & reg_out);
 
 // Print State
-void printState(STATE & state, std::ostream & out, bool printReg)
+void printState(std::ostream & out, bool printReg)
 {
     out << "\nState at beginning of cycle " << state.cycles << ":" << std::endl;
     out << "PC: " << std::hex << state.pc << std::endl;
@@ -41,7 +45,7 @@ void printState(STATE & state, std::ostream & out, bool printReg)
 // *------------------------------------------------------------*
 
 
-void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
+void updateControl(DecodedInst & decIns, CONTROL& ctrl){
     // End of program check
     if (decIns.instr == 0xfeedfeed) {
         ctrl = CONTROL_NOP;
@@ -73,7 +77,7 @@ void updateControl(STATE & state, DecodedInst & decIns, CONTROL& ctrl){
 }
 
 // Mem helper
-int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
+int doLoad(uint32_t addr, MemEntrySize size, uint32_t& data)
 {
     uint32_t value = 0;
     int ret = 0;
@@ -106,13 +110,15 @@ int doLoad(STATE &state, uint32_t addr, MemEntrySize size, uint32_t& data)
 // *------------------------------------------------------------*
 // Function for each stage
 // *------------------------------------------------------------*
-void IF(STATE & state){
+void IF(){
     uint32_t instr = 0;
     
     // fetch instruction if 0xfeedfeed has not been reached 
     if (!state.finish){
         mem->getMemValue(state.pc, instr, WORD_SIZE);
     }
+    // Update pipestate 
+    state.pipe_state.ifInstr = instr;
     
     // Update state
     state.if_id_stage.instr = instr;
@@ -124,10 +130,14 @@ void IF(STATE & state){
 }
 
 
-void ID(STATE& state){
+void ID(){
     
     // Read instruction from IF stage and Decode
     uint32_t instr = state.if_id_stage.instr;
+
+    // Update pipestate
+    state.pipe_state.idInstr = instr;
+
     if (instr == 0xfeedfeed) {
         state.finish = true;
         // state.id_ex_stage = ID_EX_STAGE{};
@@ -137,7 +147,7 @@ void ID(STATE& state){
     CONTROL ctrl;
 
     decodeInst(instr, decodedInst);
-    updateControl(state, decodedInst, ctrl);
+    updateControl(decodedInst, ctrl);
 
     if (state.exception) {
         state.branch_pc = EXCEPTION_ADDR;
@@ -165,10 +175,13 @@ void ID(STATE& state){
 
 }
 
-void EX(STATE & state)
+void EX()
 {
     uint32_t readData1, readData2; 
     EXECUTOR executor;
+
+    // Update pipestate
+    state.pipe_state.exInstr = state.id_ex_stage.decodedInst.instr;
 
     // set readReg1
     switch (state.fwd -> fwd1) {
@@ -226,7 +239,7 @@ void EX(STATE & state)
 }
 
 
-void MEM(STATE & state){ 
+void MEM(){ 
 
     // forward values
     state.fwd->mem_value = state.ex_mem_stage.aluResult;
@@ -239,6 +252,9 @@ void MEM(STATE & state){
     uint32_t setValue;
     uint32_t data;
     int ret = 0;
+
+    // Update pipestate
+    state.pipe_state.memInstr = state.ex_mem_stage.decodedInst.instr;
 
     // sw $t0, addr: t0 may be forwarded by the instruction in WB
     switch (state.fwd -> fwdWriteStore) {
@@ -263,13 +279,13 @@ void MEM(STATE & state){
                 break;
             // Loading
             case OP_LW:
-                ret = doLoad(state, addr, WORD_SIZE, data);
+                ret = doLoad(addr, WORD_SIZE, data);
                 break;
             case OP_LHU:
-                ret = doLoad(state, addr, HALF_SIZE, data);
+                ret = doLoad(addr, HALF_SIZE, data);
                 break;
             case OP_LBU:
-                ret = doLoad(state, addr, BYTE_SIZE, data);
+                ret = doLoad(addr, BYTE_SIZE, data);
                 break;
             // Default
             default:
@@ -285,7 +301,10 @@ void MEM(STATE & state){
 }
 
 
-void WB(STATE & state){
+void WB(){
+    // Update pipestate
+    state.pipe_state.wbInstr = state.mem_wb_stage.decodedInst.instr;
+
     // Check for 0xfeefeed
     if (state.mem_wb_stage.decodedInst.instr == 0xfeedfeed) {
         return;
@@ -348,7 +367,7 @@ int initMemory(std::ifstream & inputProg)
 // Main function
 int main(int argc, char *argv[])
 {
-    STATE state = {};
+    state = {};
     state.exec = new EXECUTOR{};
     state.hzd = new HAZARD_UNIT{};
     state.fwd = new FORWARD_UNIT{};
@@ -368,19 +387,19 @@ int main(int argc, char *argv[])
     uint32_t DrainIters = 3;
     while (DrainIters--)
     {
-        printState(state, std::cout, false); 
+        printState(std::cout, false); 
         state.cycles++;
         // forwarding units
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
 
-        WB(state);
+        WB();
         
 
-        MEM(state);
+        MEM();
         
         
-        EX(state);
+        EX();
         // Arithmetic overflow
         if (state.exception) {
             std::cout << "EXCEPTION\n";
@@ -388,7 +407,7 @@ int main(int argc, char *argv[])
             state.exception = false;
         }
 
-        ID(state);
+        ID();
 
         // Illegal Instruction
         if (state.exception) {
@@ -399,7 +418,7 @@ int main(int argc, char *argv[])
 
 
         if (state.finish) {
-            IF(state);
+            IF();
             continue;
         }
 
@@ -408,16 +427,73 @@ int main(int argc, char *argv[])
         if (state.stall) { 
            continue; 
         }
-        IF(state);
+        IF();
     }
 
 
-    printState(state, std::cout, true);
+    printState(std::cout, true);
     dumpMemoryState(mem);
     
 }
 
+int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mainMem){
+    // Init simulator 
+    state = {};
+    state.exec = new EXECUTOR{};
+    state.hzd = new HAZARD_UNIT{};
+    state.fwd = new FORWARD_UNIT{};
+    state.branch_fwd = new BRANCH_FORWARD_UNIT{};
 
+    // TODO init cache
 
+    // Set regs to zero 
+    for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
+}
 
+int runCycles(uint32_t cycles){
+    uint32_t = DrainIters = 3;
+    bool finEarly = false;
+    while (DrainIters--){
+        state.cycles++;
+        if (state.cycles > cycles) {
+            break;
+        }
+        state.fwd->checkFwd(state);
+        state.branch_fwd->checkFwd(state);
 
+        WB();
+        MEM();
+        EX();
+        // Arithmetic overflow
+        if (state.exception) {
+            std::cout << "EXCEPTION\n";
+            state.pc = state.branch_pc;
+            state.exception = false;
+        }
+        ID();
+        // Illegal Instruction
+        if (state.exception) {
+            std::cout << "EXCEPTION\n";
+            state.pc = state.branch_pc;
+            state.exception = false;
+        }
+        if (state.finish) {
+            IF();
+            finEarly = true;
+            continue;
+        }
+
+        ++DrainIters;
+        if (state.stall){
+            state.pipe_state.ifInstr = 0;
+            continue;
+        }
+        IF();
+    }
+    if (finEarly) {
+        dumpPipeState(state.pipe_state);
+        return 1;
+    }
+    return 0;
+
+}

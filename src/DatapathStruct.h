@@ -1,6 +1,6 @@
 #include "UtilityStruct.h"
 #include "UtilityEnum.h"
-
+#include "DriverFunctions.h"
 
 //Note that an instruction that modifies the PC will never throw an
 //exception or be prone to errors from the memory abstraction.
@@ -29,6 +29,7 @@ struct STATE
     ID_EX_STAGE id_ex_stage;
     EX_MEM_STAGE ex_mem_stage;
     MEM_WB_STAGE mem_wb_stage;
+    PipeState pipe_state;
     FORWARD_UNIT* fwd;
     BRANCH_FORWARD_UNIT* branch_fwd;  
     HAZARD_UNIT*  hzd;
