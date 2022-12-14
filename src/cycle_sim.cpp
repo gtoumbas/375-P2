@@ -19,7 +19,7 @@ extern void dumpRegisterStateInternal(RegisterInfo & reg, std::ostream & reg_out
 // Print State
 void printState(STATE & state, std::ostream & out, bool printReg)
 {
-    out << "State at beginning of cycle " << state.cycles << ":" << std::endl;
+    out << "\nState at beginning of cycle " << state.cycles << ":" << std::endl;
     out << "PC: " << std::hex << state.pc << std::endl;
     out << "IF/ID: " << std::hex << state.if_id_stage.instr << std::endl;
     out << "ID/EX: " << std::hex << state.id_ex_stage.decodedInst.instr << std::endl;
@@ -33,7 +33,6 @@ void printState(STATE & state, std::ostream & out, bool printReg)
             out << "$" << std::dec << i << ": " << std::hex << state.regs[i] << std::endl;
         }
     }
-    out << std::endl;
 }
 
 
@@ -213,14 +212,15 @@ void EX(STATE & state)
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
     state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
-    
-    // forward values
-    state.fwd->mem_value = state.ex_mem_stage.aluResult;
-    state.branch_fwd->mem_value = state.ex_mem_stage.aluResult;
 }
 
 
 void MEM(STATE & state){ 
+
+    // forward values
+    state.fwd->mem_value = state.ex_mem_stage.aluResult;
+    state.branch_fwd->mem_value = state.ex_mem_stage.aluResult;
+
     uint32_t op = state.ex_mem_stage.decodedInst.op;
     uint32_t rt = state.ex_mem_stage.decodedInst.rt;
     uint32_t addr = state.ex_mem_stage.aluResult;

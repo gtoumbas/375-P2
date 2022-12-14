@@ -48,6 +48,7 @@ struct FORWARD_UNIT
 
     void checkFwd(STATE& state) 
     {
+        fwd1 = fwd2 = fwdWriteStore = HAZARD_TYPE::NONE;
         checkMEM(state);
         checkWB(state);
         checkWriteStore(state);
@@ -58,24 +59,21 @@ private:
     {
         uint32_t where = (state.ex_mem_stage.ctrl.regDst) ? state.ex_mem_stage.decodedInst.rd : state.ex_mem_stage.decodedInst.rt;
         if (!state.ex_mem_stage.ctrl.regWrite || where == 0) {
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
-        
-        fwd1 = (where == state.id_ex_stage.decodedInst.rs) ? HAZARD_TYPE::MEM_HAZ : HAZARD_TYPE::NONE;
-        fwd2 = (where == state.id_ex_stage.decodedInst.rt) ? HAZARD_TYPE::MEM_HAZ : HAZARD_TYPE::NONE;
+        fwd1 = (where == state.id_ex_stage.decodedInst.rs) ? (HAZARD_TYPE::MEM_HAZ) : (HAZARD_TYPE::NONE);
+        fwd2 = (where == state.id_ex_stage.decodedInst.rt) ? (HAZARD_TYPE::MEM_HAZ) : (HAZARD_TYPE::NONE);
     }
     
     void checkWB(STATE& state) // example: add $t1, ... -> nop -> add $t2, $t1, $t0 -> forward from mem_wb to id_ex 
     {
         uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
         if (!state.mem_wb_stage.ctrl.regWrite || where == 0) {
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
         // check that there is no such op between this and in id_ex
-        fwd1 = ((where == state.id_ex_stage.decodedInst.rs) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::WB_HAZ : HAZARD_TYPE::NONE;
-        fwd2 = ((where == state.id_ex_stage.decodedInst.rt) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::WB_HAZ : HAZARD_TYPE::NONE;
+        fwd1 = ((where == state.id_ex_stage.decodedInst.rs) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::WB_HAZ : fwd1;
+        fwd2 = ((where == state.id_ex_stage.decodedInst.rt) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::WB_HAZ : fwd2;
     }
 
 
@@ -100,12 +98,13 @@ struct BRANCH_FORWARD_UNIT {
     {
         DecodedInst di;
         decodeInst(state.if_id_stage.instr, di);
+        fwd1 = fwd2 = HAZARD_TYPE::NONE;
         if (di.op != OP_BEQ && di.op != OP_BNE){
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
         checkEX(state, di);
         checkMEM(state, di);
+        checkLOADMEM(state, di);
         checkWB(state, di);
     }
 
@@ -114,45 +113,41 @@ private:
     {
         uint32_t where = (state.id_ex_stage.ctrl.regDst) ? state.id_ex_stage.decodedInst.rd : state.id_ex_stage.decodedInst.rt;
         if (!state.id_ex_stage.ctrl.regWrite || where == 0) {
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
-        fwd1 = (where == decodedInst.rd) ? HAZARD_TYPE::BRANCH_EX_HAZ : HAZARD_TYPE::NONE;
-        fwd2 = (where == decodedInst.rs) ? HAZARD_TYPE::BRANCH_EX_HAZ : HAZARD_TYPE::NONE;  
+        fwd1 = (where == decodedInst.rs) ? HAZARD_TYPE::BRANCH_EX_HAZ : HAZARD_TYPE::NONE;
+        fwd2 = (where == decodedInst.rt) ? HAZARD_TYPE::BRANCH_EX_HAZ : HAZARD_TYPE::NONE;  
     }
 
     void checkLOADMEM(STATE& state, DecodedInst& decodedInst) // example: load $t1, addr -> nop ->  beq $t1, $t0 -> stalls and then forward from ex/mem to if/id
     {   
         uint32_t where = (state.ex_mem_stage.ctrl.regDst) ? state.ex_mem_stage.decodedInst.rd : state.ex_mem_stage.decodedInst.rt;
         if (!state.ex_mem_stage.ctrl.memRead || !state.ex_mem_stage.ctrl.regWrite || where == 0) {
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
         // check that there is no such op between this and branch
-        fwd1 = ((where == decodedInst.rd) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_LOAD_MEM_HAZ : HAZARD_TYPE::NONE;
-        fwd2 = ((where == decodedInst.rs) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_LOAD_MEM_HAZ : HAZARD_TYPE::NONE;   
+        fwd1 = ((where == decodedInst.rs) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_LOAD_MEM_HAZ : fwd1;
+        fwd2 = ((where == decodedInst.rt) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_LOAD_MEM_HAZ : fwd2;   
     }
 
     void checkMEM(STATE &state, DecodedInst& decodedInst) { // example: add $t1, ... -> nop -> beq $t1, $t0 -> forward form ex/mem to if/id
         uint32_t where = (state.ex_mem_stage.ctrl.regDst) ? state.ex_mem_stage.decodedInst.rd : state.ex_mem_stage.decodedInst.rt;
         if (!state.ex_mem_stage.ctrl.regWrite || where == 0) {
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
         // check that there is no such op between this and branch
-        fwd1 = ((where == decodedInst.rd) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_MEM_HAZ : HAZARD_TYPE::NONE;
-        fwd2 = ((where == decodedInst.rs) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_MEM_HAZ : HAZARD_TYPE::NONE;   
+        fwd1 = ((where == decodedInst.rs) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_MEM_HAZ : fwd1;
+        fwd2 = ((where == decodedInst.rt) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_MEM_HAZ : fwd2;   
       
     }
     void checkWB(STATE &state, DecodedInst& decodedInst) { // example: add $t1, ... -> nop -> beq $t1, $t0 -> forward form ex/mem to if/id
         uint32_t where = (state.mem_wb_stage.ctrl.regDst) ? state.mem_wb_stage.decodedInst.rd : state.mem_wb_stage.decodedInst.rt;
         if (!state.ex_mem_stage.ctrl.regWrite || where == 0) {
-            fwd1 = fwd2 = HAZARD_TYPE::NONE;
             return;
         }
         // check that there is no such op between this and branch
-        fwd1 = ((where == decodedInst.rd) && (fwd1 == HAZARD_TYPE::NONE) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_WB_HAZ : HAZARD_TYPE::NONE;
-        fwd2 = ((where == decodedInst.rs) && (fwd2 == HAZARD_TYPE::NONE) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_WB_HAZ : HAZARD_TYPE::NONE;   
+        fwd1 = ((where == decodedInst.rs) && (fwd1 == HAZARD_TYPE::NONE) && (fwd1 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_WB_HAZ : fwd1;
+        fwd2 = ((where == decodedInst.rt) && (fwd2 == HAZARD_TYPE::NONE) && (fwd2 == HAZARD_TYPE::NONE)) ? HAZARD_TYPE::BRANCH_WB_HAZ : fwd2;   
       
     }
 };
@@ -201,10 +196,12 @@ private:
         if (op == OP_BNE || op == OP_BEQ) {
             switch (state.branch_fwd -> fwd1) {
                 case BRANCH_EX_HAZ:         // cant be load, because loaduse would handle this. 1 stall and fwd
+                    std::cout << "BRANCH_EX_HAZ 1\n";
                     state.stall = true;
                     return;
                 case BRANCH_MEM_HAZ:        // no stalls, fwd
                     readReg1 = state.branch_fwd -> mem_value;
+                    std::cout << "BRANCH_MEM_HAZ 1: " << readReg1 <<'\n';
                     break;
                 case BRANCH_LOAD_MEM_HAZ:   // 1 stall and fwd
                     state.stall = true;
@@ -218,9 +215,11 @@ private:
             // do forwarding
             switch (state.branch_fwd -> fwd2) {
                 case BRANCH_EX_HAZ:
+                    std::cout << "BRANCH_EX_HAZ 1\n";
                     state.stall = true;
                     return;
                 case BRANCH_MEM_HAZ:
+                    std::cout << "BRANCH_MEM_HAZ 2: " << readReg2 << '\n';
                     readReg2 = state.branch_fwd -> mem_value;
                     break;
                 case BRANCH_LOAD_MEM_HAZ:
@@ -233,6 +232,8 @@ private:
                     readReg2 = state.regs[decodedInst.rt];
             }
         }
+
+        std::cout << "COMPARE VALUES ARE " << readReg1 << ' ' <<  readReg2 << '\n';
 
         switch (op) {
             case OP_BEQ:
