@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string.h>
 #include <errno.h>
+#include <algorithm>
 #include "RegisterInfo.h"
 #include "EndianHelpers.h"
 #include "DatapathStruct.h"
@@ -76,16 +77,11 @@ void updateControl(DecodedInst & decIns, CONTROL& ctrl){
 }
 
 // Mem helper
-int doLoad(uint32_t addr, MemEntrySize size, uint32_t& data)
+int doLoad(STATE& state, uint32_t addr, MemEntrySize size, uint32_t& data)
 {
     uint32_t value = 0;
     int ret = 0;
-    ret = mem->getMemValue(addr, value, size);
-    if (ret)
-    {
-            std::cout << "Could not get mem value" << std::endl;
-            return ret;
-    }
+    ret = state.d_cache->getCacheValue(addr, value, size);
 
     switch (size)
     {
@@ -103,7 +99,7 @@ int doLoad(uint32_t addr, MemEntrySize size, uint32_t& data)
             return -EINVAL;
     }
 
-    return 0;
+    return ret;
 }
 
 // *------------------------------------------------------------*
@@ -111,27 +107,34 @@ int doLoad(uint32_t addr, MemEntrySize size, uint32_t& data)
 // *------------------------------------------------------------*
 void IF(){
     uint32_t instr = 0;
+    state.pipe_state.ifInstr = instr;
+    
+    // decrement wait_cycles and return if still have to wait
+    if ((state.if_wait_cycles = std::max(state.if_wait_cycles - 1, 0)) > 0) {
+        return;
+    }
     
     // fetch instruction if 0xfeedfeed has not been reached 
     if (!state.finish){
-        auto hit = mem->getMemValue(state.pc, instr, WORD_SIZE);
+        auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
+        if (hit != CACHE_RET::HIT) {    // miss -> set penalty cycles
+            state.if_wait_cycles = state.i_cache -> Penalty() - 1;
+            return;
+        }
     }
-    // Update pipestate 
+    // update pipe state
     state.pipe_state.ifInstr = instr;
-    
-    // Update state
-    state.if_id_stage.instr = instr;
-    state.if_id_stage.npc = state.pc + 4;
-
-    // increment pc
-
-    state.pc = (state.hzd -> jump) ? state.branch_pc : state.pc + 4;
+    if (!state.if_id_stage.block) {         // if next stage not blocked, then move forward
+        state.if_id_stage.instr = instr;
+        state.if_id_stage.npc = state.pc + 4;
+        state.pc = (state.hzd -> jump || state.exception) ? state.branch_pc : state.pc + 4;
+    } else {                                // come back next time
+        return;
+    }
 }
 
 
 void ID(){
-    
-    // Read instruction from IF stage and Decode
     uint32_t instr = state.if_id_stage.instr;
 
     // Update pipestate
@@ -162,7 +165,6 @@ void ID(){
     // also if op was branch or jump do not push it forward (exception: JAL)
     if (state.stall || (JB_OP.count(decodedInst.op) > 0 && decodedInst.op != OP_JAL)){
         state.id_ex_stage = ID_EX_STAGE{};
-        std::cout << "STALLING IN ID()\n";
         return;
     }
 
@@ -172,12 +174,12 @@ void ID(){
     state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
     state.id_ex_stage.ctrl = ctrl;
 
+    state.if_id_stage = IF_ID_STAGE{};
 }
 
 void EX()
 {
     uint32_t readData1, readData2; 
-    EXECUTOR executor;
 
     // Update pipestate
     state.pipe_state.exInstr = state.id_ex_stage.decodedInst.instr;
@@ -218,9 +220,9 @@ void EX()
     // DO ALU Operations
     if (state.id_ex_stage.decodedInst.instr != 0xfeedfeed) {
         if (op == OP_ZERO) {
-            executor.executeR(state);
+            state.exec -> executeR(state);
         } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
-            executor.executeI(state);
+            state.exec -> executeI(state);
         } // branch and jump finished by this time
     }
 
@@ -235,6 +237,8 @@ void EX()
     state.ex_mem_stage.npc = state.id_ex_stage.npc;
     state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
     state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
+
+    state.id_ex_stage = ID_EX_STAGE{};
 }
 
 
@@ -268,23 +272,23 @@ void MEM(){
         switch(op){
             // Storing
             case OP_SW:
-                ret = mem->setMemValue(addr, setValue, WORD_SIZE); 
+                ret = state.d_cache->setCacheValue(addr, setValue, WORD_SIZE); 
                 break;
             case OP_SH:
-                ret = mem->setMemValue(addr, instructBits(setValue, 31, 16), HALF_SIZE); 
+                ret = state.d_cache->setCacheValue(addr, instructBits(setValue, 31, 16), HALF_SIZE); 
                 break;
             case OP_SB:
-                ret = mem->setMemValue(addr, instructBits(setValue, 31, 24), BYTE_SIZE);
+                ret = state.d_cache->setCacheValue(addr, instructBits(setValue, 31, 24), BYTE_SIZE);
                 break;
             // Loading
             case OP_LW:
-                ret = doLoad(addr, WORD_SIZE, data);
+                ret = doLoad(state, addr, WORD_SIZE, data);
                 break;
             case OP_LHU:
-                ret = doLoad(addr, HALF_SIZE, data);
+                ret = doLoad(state, addr, HALF_SIZE, data);
                 break;
             case OP_LBU:
-                ret = doLoad(addr, BYTE_SIZE, data);
+                ret = doLoad(state, addr, BYTE_SIZE, data);
                 break;
             // Default
             default:
@@ -297,6 +301,8 @@ void MEM(){
     state.mem_wb_stage.data = data;
     state.mem_wb_stage.ctrl = state.ex_mem_stage.ctrl;
     state.mem_wb_stage.npc = state.ex_mem_stage.npc;
+
+    state.ex_mem_stage = EX_MEM_STAGE{};
 }
 
 
@@ -324,7 +330,9 @@ void WB(){
         state.regs[REG_RA] = state.mem_wb_stage.npc + 4;
     }
 
-    state.mem_wb_stage.data = writeData; 
+   // state.mem_wb_stage.data = writeData; 
+
+   state.mem_wb_stage = MEM_WB_STAGE{};
 }
 
 
@@ -445,6 +453,8 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
     mem = mainMem;
 
     // TODO init cache
+    state.i_cache = new Cache(icConfig, mainMem);
+    state.d_cache = new Cache(dcConfig, mainMem);
 
     // Set regs to zero 
     for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
@@ -458,6 +468,8 @@ int runCycles(uint32_t cycles){
     bool finEarly = false;
     while (DrainIters--){
         state.cycles++;
+        state.exception = false;
+
         if (state.cycles > cycles) {
             state.cycles--;
             break;
@@ -469,19 +481,7 @@ int runCycles(uint32_t cycles){
         WB();
         MEM();
         EX();
-        // Arithmetic overflow
-        if (state.exception) {
-            std::cout << "EXCEPTION\n";
-            state.pc = state.branch_pc;
-            state.exception = false;
-        }
         ID();
-        // Illegal Instruction
-        if (state.exception) {
-            std::cout << "EXCEPTION\n";
-            state.pc = state.branch_pc;
-            state.exception = false;
-        }
         if (state.finish) {
             IF();
             finEarly = true;
@@ -502,5 +502,16 @@ int runCycles(uint32_t cycles){
         dumpPipeState(state.pipe_state);
         return 1;
     }
+    return 0;
+}
+
+
+int main(int argc, char *argv[]) {
+
+    CacheConfig icConfig{4, 4, DIRECT_MAPPED, 5};
+    CacheConfig idConfig{4, 4, DIRECT_MAPPED, 5};
+    mem = createMemoryStore();
+    initSimulator(icConfig, idConfig, mem);
+
     return 0;
 }

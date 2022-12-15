@@ -70,6 +70,7 @@ void decodeInst(uint32_t inst, DecodedInst & decodedInst){
 struct IF_ID_STAGE{
     uint32_t instr;
     uint32_t npc;
+    bool block;
 };
 
 struct ID_EX_STAGE{
@@ -78,6 +79,7 @@ struct ID_EX_STAGE{
     uint32_t readData1;
     uint32_t readData2;
     CONTROL ctrl;
+    bool block;
 };    
 
 struct EX_MEM_STAGE{
@@ -86,6 +88,7 @@ struct EX_MEM_STAGE{
     uint32_t aluResult;
     uint32_t setMemValue;
     CONTROL ctrl;
+    bool block;
 };
 
 struct MEM_WB_STAGE{
@@ -94,5 +97,6 @@ struct MEM_WB_STAGE{
     uint32_t npc;
     uint32_t data; 
     CONTROL ctrl;
+    bool block;
 };
 

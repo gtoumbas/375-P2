@@ -24,8 +24,9 @@ struct EXECUTOR;  // do not delete or compilation error
 struct STATE
 {
     uint32_t pc, branch_pc;
-    uint32_t cycles, wait_cycles;
+    uint32_t cycles;
     uint32_t regs[NUM_REGS];
+    int if_wait_cycles, mem_wait_cycles;
     IF_ID_STAGE if_id_stage;
     ID_EX_STAGE id_ex_stage;
     EX_MEM_STAGE ex_mem_stage;

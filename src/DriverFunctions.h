@@ -1,4 +1,3 @@
-#pragma once 
 #include "CacheConfig.h"
 #include "MemoryStore.h"
 struct PipeState
@@ -9,6 +8,19 @@ struct PipeState
     uint32_t exInstr;
     uint32_t memInstr;
     uint32_t wbInstr;
+};
+
+struct PipeStateWriter
+{
+    PipeStateWriter(uint32_t& x, uint32_t& y): x(x), y(y) 
+    {}
+
+    ~PipeStateWriter() {
+        x = y;
+    }
+private:
+    uint32_t& x;
+    uint32_t& y;
 };
 
 struct SimulationStats
