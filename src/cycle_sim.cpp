@@ -220,7 +220,7 @@ void EX()
     if (state.id_ex_stage.decodedInst.instr != 0xfeedfeed) {
         if (op == OP_ZERO) {
             state.exec -> executeR(state);
-        } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || op == OP_LUI || STORE_OP.count(op) != 0) {
+        } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0  || STORE_OP.count(op) != 0) {
             state.exec -> executeI(state);
         } // branch and jump finished by this time
     }
