@@ -117,6 +117,7 @@ void IF(){
     // fetch instruction if 0xfeedfeed has not been reached 
     if (!state.finish){
         auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
+        std::cout << "CACHE ACCESS " << state.pc << ' ' << instr << ' ' << hit << '\n';
         if (hit != CACHE_RET::HIT) {                                            // miss -> set penalty cycles
             state.if_wait_cycles = state.i_cache -> Penalty() - 1;
             return;
@@ -370,6 +371,7 @@ int runCycles(uint32_t cycles){
     uint32_t DrainIters = 4; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
+        printState(std::cout, false);
         if (state.cycles == (cycles - 1 + startingCycle)) {
             break;
         }

@@ -90,7 +90,7 @@ public:
         uint32_t tag, index, offset;
         tag = getTag(addr);
         index = getIndex(addr);
-        offset = getOffset(offset);
+        offset = getOffset(addr);
 
         // go to cache[index] and find correspoding tag
         value = 0;
@@ -115,7 +115,7 @@ public:
             for (uint32_t i = 0; i < cfg.blockSize; ++i) {
                 uint32_t res;
                 mem->getMemValue(addr - offset + i, res, BYTE_SIZE);
-                res = cache[index][whereToPut].data[i];
+                cache[index][whereToPut].data[i] = res;
             }
             ++miss;
         }
