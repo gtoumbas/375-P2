@@ -329,111 +329,111 @@ void WB(){
 
 
 
-// Driver stuff
-int initMemory(std::ifstream & inputProg)
-{
-    // Check if mem is already initialized
+// // Driver stuff
+// int initMemory(std::ifstream & inputProg)
+// {
+//     // Check if mem is already initialized
 
-    if (inputProg && mem)
-    {
-        uint32_t curVal = 0;
-        uint32_t addr = 0;
+//     if (inputProg && mem)
+//     {
+//         uint32_t curVal = 0;
+//         uint32_t addr = 0;
 
-        while (inputProg.read((char *)(&curVal), sizeof(uint32_t)))
-        {
-            curVal = ConvertWordToBigEndian(curVal);
-            int ret = mem->setMemValue(addr, curVal, WORD_SIZE);
+//         while (inputProg.read((char *)(&curVal), sizeof(uint32_t)))
+//         {
+//             curVal = ConvertWordToBigEndian(curVal);
+//             int ret = mem->setMemValue(addr, curVal, WORD_SIZE);
 
-            if (ret)
-            {
-                std::cout << "Could not set memory value!" << std::endl;
-                return -EINVAL;
-            }
+//             if (ret)
+//             {
+//                 std::cout << "Could not set memory value!" << std::endl;
+//                 return -EINVAL;
+//             }
 
-            // We're reading 4 bytes each time...
-            addr += 4;
-        }
-    }
-    else
-    {
-        std::cout << "Invalid file stream or memory image passed, could not initialise memory values" << std::endl;
-        return -EINVAL;
-    }
+//             // We're reading 4 bytes each time...
+//             addr += 4;
+//         }
+//     }
+//     else
+//     {
+//         std::cout << "Invalid file stream or memory image passed, could not initialise memory values" << std::endl;
+//         return -EINVAL;
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
 // Main function
-int main(int argc, char *argv[])
-{
-    state = {};
-    state.exec = new EXECUTOR{};
-    state.hzd = new HAZARD_UNIT{};
-    state.fwd = new FORWARD_UNIT{};
-    state.branch_fwd = new BRANCH_FORWARD_UNIT{};
+// int main(int argc, char *argv[])
+// {
+//     state = {};
+//     state.exec = new EXECUTOR{};
+//     state.hzd = new HAZARD_UNIT{};
+//     state.fwd = new FORWARD_UNIT{};
+//     state.branch_fwd = new BRANCH_FORWARD_UNIT{};
     
-    for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
+//     for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
 
-    std::ifstream prog; 
-    prog.open(argv[1], std::ios::binary | std::ios::in);
-    mem = createMemoryStore();
+//     std::ifstream prog; 
+//     prog.open(argv[1], std::ios::binary | std::ios::in);
+//     mem = createMemoryStore();
 
-    if (initMemory(prog))
-    {
-        return -EBADF;
-    }
+//     if (initMemory(prog))
+//     {
+//         return -EBADF;
+//     }
     
-    uint32_t DrainIters = 3;
-    while (DrainIters--)
-    {
-        printState(std::cout, false); 
-        state.cycles++;
-        // forwarding units
-        state.fwd->checkFwd(state);
-        state.branch_fwd->checkFwd(state);
+//     uint32_t DrainIters = 3;
+//     while (DrainIters--)
+//     {
+//         printState(std::cout, false); 
+//         state.cycles++;
+//         // forwarding units
+//         state.fwd->checkFwd(state);
+//         state.branch_fwd->checkFwd(state);
 
-        WB();
+//         WB();
         
 
-        MEM();
+//         MEM();
         
         
-        EX();
-        // Arithmetic overflow
-        if (state.exception) {
-            std::cout << "EXCEPTION\n";
-            state.pc = state.branch_pc;
-            state.exception = false;
-        }
+//         EX();
+//         // Arithmetic overflow
+//         if (state.exception) {
+//             std::cout << "EXCEPTION\n";
+//             state.pc = state.branch_pc;
+//             state.exception = false;
+//         }
 
-        ID();
+//         ID();
 
-        // Illegal Instruction
-        if (state.exception) {
-            std::cout << "EXCEPTION\n";
-            state.pc = state.branch_pc;
-            state.exception = false;
-        }
-
-
-        if (state.finish) {
-            IF();
-            continue;
-        }
+//         // Illegal Instruction
+//         if (state.exception) {
+//             std::cout << "EXCEPTION\n";
+//             state.pc = state.branch_pc;
+//             state.exception = false;
+//         }
 
 
-        ++DrainIters;
-        if (state.stall) { 
-           continue; 
-        }
-        IF();
-    }
+//         if (state.finish) {
+//             IF();
+//             continue;
+//         }
 
 
-    printState(std::cout, true);
-    dumpMemoryState(mem);
+//         ++DrainIters;
+//         if (state.stall) { 
+//            continue; 
+//         }
+//         IF();
+//     }
+
+
+//     printState(std::cout, true);
+//     dumpMemoryState(mem);
     
-}
+// }
 
 int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mainMem){
     // Init simulator 
@@ -442,6 +442,7 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
     state.hzd = new HAZARD_UNIT{};
     state.fwd = new FORWARD_UNIT{};
     state.branch_fwd = new BRANCH_FORWARD_UNIT{};
+    mem = mainMem;
 
     // TODO init cache
 
@@ -452,13 +453,16 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 }
 
 int runCycles(uint32_t cycles){
+    // TODO Update pipe_cycle
     uint32_t DrainIters = 3;
     bool finEarly = false;
     while (DrainIters--){
         state.cycles++;
         if (state.cycles > cycles) {
+            state.cycles--;
             break;
         }
+
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
 
@@ -491,10 +495,12 @@ int runCycles(uint32_t cycles){
         }
         IF();
     }
+    printState(std::cout, true);
+ 
     if (finEarly) {
+        state.pipe_state.cycle = state.cycles;
         dumpPipeState(state.pipe_state);
         return 1;
     }
     return 0;
-
 }
