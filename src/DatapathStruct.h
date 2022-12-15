@@ -1,3 +1,4 @@
+#pragma once
 #include "UtilityStruct.h"
 #include "UtilityEnum.h"
 #include "DriverFunctions.h"

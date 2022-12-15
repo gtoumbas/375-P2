@@ -1,3 +1,4 @@
+#pragma once 
 #include "CacheConfig.h"
 #include "MemoryStore.h"
 struct PipeState

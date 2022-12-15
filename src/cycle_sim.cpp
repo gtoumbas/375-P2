@@ -114,7 +114,7 @@ void IF(){
     
     // fetch instruction if 0xfeedfeed has not been reached 
     if (!state.finish){
-        mem->getMemValue(state.pc, instr, WORD_SIZE);
+        auto hit = mem->getMemValue(state.pc, instr, WORD_SIZE);
     }
     // Update pipestate 
     state.pipe_state.ifInstr = instr;
