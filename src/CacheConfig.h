@@ -1,5 +1,5 @@
-#include <inttypes.h>
 #pragma once 
+#include <inttypes.h>
 enum CacheType
 {
     DIRECT_MAPPED,
