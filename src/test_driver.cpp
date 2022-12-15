@@ -61,8 +61,8 @@ int main(int argc, char **argv)
     }
 
     CacheConfig icConfig;
-    icConfig.cacheSize = 1024;
-    icConfig.blockSize = 64;
+    icConfig.cacheSize = 16;
+    icConfig.blockSize = 4;
     icConfig.type = DIRECT_MAPPED;
     icConfig.missLatency = 5;
     CacheConfig dcConfig = icConfig;

@@ -61,9 +61,10 @@ private:
 
 		// write-back for the evicted block	
         cache[index][ret].valid = false;
+        uint32_t evict_addr = (cache[index][ret].tag << (index_bits + offset_bits)) + (index << offset_bits);
 		if (cache[index][ret].dirty) {
 			for (uint32_t i = 0; i < cfg.blockSize; ++i) {
-				mem->setMemValue(addr - offset + i, cache[index][ret].data[i], BYTE_SIZE);
+				mem->setMemValue(evict_addr + i, cache[index][ret].data[i], BYTE_SIZE);
 			}
 		}
 
