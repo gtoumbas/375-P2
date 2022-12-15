@@ -1,7 +1,7 @@
 #include "UtilityStruct.h"
 #include "UtilityEnum.h"
 #include "DriverFunctions.h"
-
+#include "Cache.h"
 //Note that an instruction that modifies the PC will never throw an
 //exception or be prone to errors from the memory abstraction.
 //Thus a single value is enough to depict the status of an instruction.

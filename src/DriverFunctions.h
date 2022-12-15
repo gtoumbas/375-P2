@@ -1,5 +1,5 @@
 #include "CacheConfig.h"
-
+#include "MemoryStore.h"
 struct PipeState
 {
     uint32_t cycle;

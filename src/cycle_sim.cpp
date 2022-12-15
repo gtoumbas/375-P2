@@ -6,7 +6,6 @@
 #include "RegisterInfo.h"
 #include "EndianHelpers.h"
 #include "DatapathStruct.h"
-#include "Cache.h"
 #include<set>
 
 #define END 0xfeedfeed
@@ -448,10 +447,12 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 
     // Set regs to zero 
     for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
+
+    return 1;
 }
 
 int runCycles(uint32_t cycles){
-    uint32_t = DrainIters = 3;
+    uint32_t DrainIters = 3;
     bool finEarly = false;
     while (DrainIters--){
         state.cycles++;

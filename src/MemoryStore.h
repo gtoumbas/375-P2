@@ -1,3 +1,4 @@
+#pragma once
 #include <inttypes.h>
 
 //The memory is 64 KB large.

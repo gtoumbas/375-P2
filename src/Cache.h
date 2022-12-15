@@ -1,10 +1,11 @@
-
+#pragma once
 #include "CacheConfig.h"
 #include "MemoryStore.h"
 #include <math.h>
 #include <vector>
 
-using byte_t = uint32_t;
+
+using byte_t = uint8_t;
 
 enum CACHE_RET {
     HIT, MISS
@@ -112,7 +113,9 @@ public:
             cache[index][whereToPut].valid = true;
             cache[index][whereToPut].dirty = false;
             for (uint32_t i = 0; i < cfg.blockSize; ++i) {
-                mem->getMemValue(addr - offset + i, cache[index][whereToPut].data[i], BYTE_SIZE);
+                uint32_t res;
+                mem->getMemValue(addr - offset + i, res, BYTE_SIZE);
+                res = cache[index][whereToPut].data[i];
             }
             ++miss;
         }
@@ -152,7 +155,9 @@ public:
             cache[index][whereToPut].valid = true;
             cache[index][whereToPut].dirty = true;
             for (uint32_t i = 0; i < cfg.blockSize; ++i) {
-                mem->getMemValue(addr - offset + i, cache[index][whereToPut].data[i], BYTE_SIZE);
+                uint32_t res;
+                mem->getMemValue(addr - offset + i, res, BYTE_SIZE);
+                cache[index][whereToPut].data[i] = res;
             }
             ++miss;
         }
@@ -176,4 +181,3 @@ public:
         return cfg.missLatency;
     }
 };
-
