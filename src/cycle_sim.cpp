@@ -345,14 +345,17 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 }
 
 int runCycles(uint32_t cycles){
+    uint32_t startingCycle = state.cycles;
     uint32_t DrainIters = 4; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
-        state.cycles++;
-        if (state.cycles > cycles) {
-            state.cycles--;
+        if (state.cycles == (cycles - 1 + startingCycle)) {
             break;
         }
+        // Testing REMOVE 
+        state.pipe_state.cycle = state.cycles;
+        dumpPipeState(state.pipe_state);
+        state.cycles++;
 
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
@@ -389,11 +392,39 @@ int runCycles(uint32_t cycles){
     // For testing
     printState(std::cout, true);
     dumpMemoryState(mem);
+    state.pipe_state.cycle = state.cycles;
+    dumpPipeState(state.pipe_state);
+
     if (finEarly) {
-        state.pipe_state.cycle = state.cycles;
-        dumpPipeState(state.pipe_state);
         return 1;
     }
     return 0;
 }
 
+int runTillHalt(){
+    uint32_t cycles = 0;
+    while (runCycles(cycles) == 0) {
+        cycles += 4; // Is this problematic. Could potentially reset value of 
+        // DrainIters to 4 right?
+    }
+    return 0;
+}
+
+
+int finalizeSimulator(){
+    SimulationStats stats = {};
+    stats.totalCycles = state.cycles + 1; // Start at zero 
+    // TODO implement cache stats 
+    printSimStats(stats);
+
+    // Write back dirty cache values, does not need to be cycle accurate
+    // TODO
+
+    //Dump RegisterInfo TODO
+
+    // Dump Memory
+    dumpMemoryState(mem);
+
+    return 0;
+
+}
