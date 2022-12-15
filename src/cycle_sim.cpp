@@ -159,7 +159,6 @@ void ID(){
         state.hzd -> checkHazard(state, decodedInst);
     }
 
-    std::cout << "ID VALS: " << state.if_id_stage.block << '\n'; 
 
     if (state.stall || (JB_OP.count(decodedInst.op) > 0 && decodedInst.op != OP_JAL)){
         state.id_ex_stage = ID_EX_STAGE{};
@@ -207,11 +206,7 @@ void EX()
             break;
 
         case HAZARD_TYPE::NONE:
-            if (state.id_ex_stage.ctrl.regDst) {
-                state.id_ex_stage.readData2 = state.id_ex_stage.readData2;
-            } else {
-                state.id_ex_stage.readData2 = state.id_ex_stage.decodedInst.signExtIm;
-            }
+            break;
     }
 
     uint32_t op = state.id_ex_stage.decodedInst.op;
@@ -221,6 +216,7 @@ void EX()
         if (op == OP_ZERO) {
             state.exec -> executeR(state);
         } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0  || STORE_OP.count(op) != 0) {
+            std::cout << "------------------------------------------------------\n";
             state.exec -> executeI(state);
         } // branch and jump finished by this time
     }
@@ -236,6 +232,7 @@ void EX()
         state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
         state.ex_mem_stage.npc = state.id_ex_stage.npc;
         state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
+        std::cout << "READ DATA 2 VALUE FOR INSTRUCTION " << state.id_ex_stage.decodedInst.instr << " is " << state.id_ex_stage.readData2 << '\n'; 
         state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
         state.id_ex_stage = ID_EX_STAGE{};
     }
@@ -282,6 +279,7 @@ void MEM(){
         switch(op){
             // Storing
             case OP_SW:
+                std::cout << "SW in MEM(): " << addr << ' ' << setValue << '\n';
                 ret = state.d_cache->setCacheValue(addr, setValue, WORD_SIZE); 
                 break;
             case OP_SH:
@@ -347,6 +345,7 @@ void WB(){
     if (op == OP_JAL){
         state.regs[REG_RA] = state.mem_wb_stage.npc + 4;
     }
+
 }
 
 

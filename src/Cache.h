@@ -26,7 +26,7 @@ private:
 	MemoryStore* mem;
 	uint32_t n, entries, tag_bits, index_bits, offset_bits, use_counter, hits, miss;
 	std::vector<std::vector<Block>> cache;
-		
+
 	uint32_t getTag(uint32_t addr) {
 		return addr >> (32 - tag_bits);
 	}
@@ -166,6 +166,7 @@ public:
         for (int j = 0; j < size; ++j) {
             byte_t byte_val = ((value << (32 - 8 * size + 8 * j)) >> 24); // V = V_1V_2V_3V_4          
             cache[index][whereToPut].data[offset + j] = byte_val;         // [0]...[offset+0] = V1 [offset+1] = V2 [offset+2] = V3 [offset+3] = V4...[block_size - 1]
+
         }
     
         return (hit) ? CACHE_RET::HIT : CACHE_RET::MISS;

@@ -415,7 +415,6 @@ struct EXECUTOR
                 break;
             case OP_LUI:
                 aluResult = (imm << 16);
-                std::cout << "LUI RESULT " << aluResult << ' ' << imm << "-----------------------------------------------------\n";
                 break;
             case OP_LW:
                 aluResult = addr;
@@ -438,6 +437,7 @@ struct EXECUTOR
                 break;
             case OP_SW:
                 aluResult = addr;
+                std::cout << "SW address " << aluResult << '\n';
                 break;
             case OP_SH:
                 aluResult = addr;
