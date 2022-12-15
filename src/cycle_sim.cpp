@@ -158,6 +158,9 @@ void ID(){
         state.hzd -> jump = false;  // erase previously written value 
         state.hzd -> checkHazard(state, decodedInst);
     }
+
+    std::cout << "ID VALS: " << state.if_id_stage.block << '\n'; 
+
     if (state.stall || (JB_OP.count(decodedInst.op) > 0 && decodedInst.op != OP_JAL)){
         state.id_ex_stage = ID_EX_STAGE{};
         return;
@@ -249,6 +252,11 @@ void MEM(){
     if ((state.mem_wait_cycles = std::max(state.mem_wait_cycles - 1, 0)) > 0){ // still blocked
         return;
     }
+
+    state.if_id_stage.block = false;
+    state.id_ex_stage.block = false;
+    state.ex_mem_stage.block = false;
+    
 
     uint32_t op = state.ex_mem_stage.decodedInst.op;
     uint32_t rt = state.ex_mem_stage.decodedInst.rt;
