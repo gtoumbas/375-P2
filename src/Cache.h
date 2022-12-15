@@ -132,7 +132,7 @@ public:
         uint32_t tag, index, offset;
         tag = getTag(addr);
         index = getIndex(addr);
-        offset = getOffset(offset);
+        offset = getOffset(addr);
         bool hit = false;
         uint32_t whereToPut;
         for (int i = 0; i < n; ++i) {
