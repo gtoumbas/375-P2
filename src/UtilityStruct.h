@@ -80,6 +80,7 @@ struct ID_EX_STAGE{
     uint32_t readData2;
     CONTROL ctrl;
     bool block;
+    bool executed;
 };    
 
 struct EX_MEM_STAGE{
@@ -89,6 +90,7 @@ struct EX_MEM_STAGE{
     uint32_t setMemValue;
     CONTROL ctrl;
     bool block;
+    bool executed;
 };
 
 struct MEM_WB_STAGE{
