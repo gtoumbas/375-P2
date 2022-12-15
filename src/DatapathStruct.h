@@ -364,7 +364,9 @@ struct EXECUTOR
             state.exception = true;
             return;
         }
-        state.ex_mem_stage.aluResult = aluResult;
+        if (!state.ex_mem_stage.block){
+            state.ex_mem_stage.aluResult = aluResult;
+        }
     }
 
     void executeI(STATE& state) {
@@ -415,6 +417,7 @@ struct EXECUTOR
                 aluResult = (imm << 16);
                 break;
             case OP_LW:
+                std::cout << "LOAD ALU RESULT: " << addr << '\n';
                 aluResult = addr;
                 break;
             case OP_ORI:
@@ -445,8 +448,9 @@ struct EXECUTOR
             state.exception = true;
             return;
         }
-
-        state.ex_mem_stage.aluResult = aluResult;
+        if (!state.ex_mem_stage.block){
+            state.ex_mem_stage.aluResult = aluResult;
+        }
     }
 
 };

@@ -187,6 +187,7 @@ void EX()
     switch (state.fwd -> fwd1) {
         case HAZARD_TYPE::MEM_HAZ:  // example: add $t1, ... (in MEM now)-> add $t0, $t1, $t1 (in EX now): 
             state.id_ex_stage.readData1 = state.fwd->mem_value;
+            std::cout << "FORWARDING !!!!!!!!!!!! 1111 " << state.fwd -> mem_value << '\n';
             break;
         
         case HAZARD_TYPE::WB_HAZ: // example: add $t1, ... (in WB now)-> nop -> add $t0, $t1, $t1 (in EX now): 
@@ -200,6 +201,7 @@ void EX()
     switch (state.fwd -> fwd2) {
         case HAZARD_TYPE::MEM_HAZ:
             state.id_ex_stage.readData2 =  state.fwd->mem_value;
+            std::cout << "FORWARDING !!!!!!!!!!!! 2222 " << state.fwd -> mem_value << '\n';
             break;
         
         case HAZARD_TYPE::WB_HAZ:
@@ -292,6 +294,7 @@ void MEM(){
                 break;
             // Loading
             case OP_LW:
+                std::cout << "LOAD WORD ARGS: " << addr << "\n";
                 ret = doLoad(state, addr, WORD_SIZE, data);
                 break;
             case OP_LHU:
@@ -347,10 +350,6 @@ void WB(){
     if (op == OP_JAL){
         state.regs[REG_RA] = state.mem_wb_stage.npc + 4;
     }
-
-   // state.mem_wb_stage.data = writeData; 
-
-   state.mem_wb_stage = MEM_WB_STAGE{};
 }
 
 
