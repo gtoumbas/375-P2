@@ -187,7 +187,6 @@ void EX()
     switch (state.fwd -> fwd1) {
         case HAZARD_TYPE::MEM_HAZ:  // example: add $t1, ... (in MEM now)-> add $t0, $t1, $t1 (in EX now): 
             state.id_ex_stage.readData1 = state.fwd->mem_value;
-            std::cout << "FORWARDING !!!!!!!!!!!! 1111 " << state.fwd -> mem_value << '\n';
             break;
         
         case HAZARD_TYPE::WB_HAZ: // example: add $t1, ... (in WB now)-> nop -> add $t0, $t1, $t1 (in EX now): 
@@ -201,7 +200,6 @@ void EX()
     switch (state.fwd -> fwd2) {
         case HAZARD_TYPE::MEM_HAZ:
             state.id_ex_stage.readData2 =  state.fwd->mem_value;
-            std::cout << "FORWARDING !!!!!!!!!!!! 2222 " << state.fwd -> mem_value << '\n';
             break;
         
         case HAZARD_TYPE::WB_HAZ:
@@ -222,7 +220,7 @@ void EX()
     if (state.id_ex_stage.decodedInst.instr != 0xfeedfeed) {
         if (op == OP_ZERO) {
             state.exec -> executeR(state);
-        } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || STORE_OP.count(op) != 0) {
+        } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0 || op == OP_LUI || STORE_OP.count(op) != 0) {
             state.exec -> executeI(state);
         } // branch and jump finished by this time
     }
@@ -294,7 +292,6 @@ void MEM(){
                 break;
             // Loading
             case OP_LW:
-                std::cout << "LOAD WORD ARGS: " << addr << "\n";
                 ret = doLoad(state, addr, WORD_SIZE, data);
                 break;
             case OP_LHU:
