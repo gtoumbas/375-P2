@@ -110,27 +110,27 @@ void IF(){
     state.pipe_state.ifInstr = instr;
     
     // decrement wait_cycles and return if still have to wait
-    if ((state.if_wait_cycles = std::max(state.if_wait_cycles - 1, 0)) > 0) {
+    if ((state.if_wait_cycles = std::max(state.if_wait_cycles - 1, 0)) > 0) {   // still blocked
         return;
     }
     
     // fetch instruction if 0xfeedfeed has not been reached 
     if (!state.finish){
         auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
-        if (hit != CACHE_RET::HIT) {    // miss -> set penalty cycles
+        if (hit != CACHE_RET::HIT) {                                            // miss -> set penalty cycles
             state.if_wait_cycles = state.i_cache -> Penalty() - 1;
             return;
         }
     }
     // update pipe state
     state.pipe_state.ifInstr = instr;
+  
     if (!state.if_id_stage.block) {         // if next stage not blocked, then move forward
         state.if_id_stage.instr = instr;
         state.if_id_stage.npc = state.pc + 4;
         state.pc = (state.hzd -> jump || state.exception) ? state.branch_pc : state.pc + 4;
-    } else {                                // come back next time
-        return;
     }
+    
 }
 
 
@@ -162,13 +162,14 @@ void ID(){
         return;
     }
 
-    state.id_ex_stage.decodedInst = decodedInst;
-    state.id_ex_stage.npc = state.if_id_stage.npc;
-    state.id_ex_stage.readData1 = state.regs[decodedInst.rs];
-    state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
-    state.id_ex_stage.ctrl = ctrl;
-
-    state.if_id_stage = IF_ID_STAGE{};
+    if (!state.id_ex_stage.block){
+        state.id_ex_stage.decodedInst = decodedInst;
+        state.id_ex_stage.npc = state.if_id_stage.npc;
+        state.id_ex_stage.readData1 = state.regs[decodedInst.rs];
+        state.id_ex_stage.readData2 = state.regs[decodedInst.rt];
+        state.id_ex_stage.ctrl = ctrl;
+        state.if_id_stage = IF_ID_STAGE{};
+    }
 }
 
 void EX()
@@ -220,19 +221,20 @@ void EX()
         } // branch and jump finished by this time
     }
 
-    if (state.exception) {
+    if (state.exception) {                  // flush everything
         state.branch_pc = EXCEPTION_ADDR; 
         state.ex_mem_stage = EX_MEM_STAGE{};
         state.id_ex_stage = ID_EX_STAGE{};
         state.if_id_stage = IF_ID_STAGE{};
         return;
     } 
-    state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
-    state.ex_mem_stage.npc = state.id_ex_stage.npc;
-    state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
-    state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
-
-    state.id_ex_stage = ID_EX_STAGE{};
+    if (!state.ex_mem_stage.block){
+        state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
+        state.ex_mem_stage.npc = state.id_ex_stage.npc;
+        state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
+        state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
+        state.id_ex_stage = ID_EX_STAGE{};
+    }
 }
 
 
@@ -242,13 +244,18 @@ void MEM(){
     state.fwd->mem_value = state.ex_mem_stage.aluResult;
     state.branch_fwd->mem_value = state.ex_mem_stage.aluResult;
 
+    // decrement wait_cycles and check if have to wait more
+    if ((state.mem_wait_cycles = std::max(state.mem_wait_cycles - 1, 0)) > 0){ // still blocked
+        return;
+    }
+
     uint32_t op = state.ex_mem_stage.decodedInst.op;
     uint32_t rt = state.ex_mem_stage.decodedInst.rt;
     uint32_t addr = state.ex_mem_stage.aluResult;
     uint32_t imm = state.ex_mem_stage.decodedInst.imm;
     uint32_t setValue;
     uint32_t data;
-    int ret = 0;
+    int ret = CACHE_RET::HIT;
 
     // Update pipestate
     state.pipe_state.memInstr = state.ex_mem_stage.decodedInst.instr;
@@ -288,6 +295,14 @@ void MEM(){
             default:
                 data = state.ex_mem_stage.aluResult;
         }
+    }
+
+    if (ret != CACHE_RET::HIT) {    // if miss -> block all storages before this one
+        state.mem_wait_cycles = state.d_cache->Penalty() - 1;
+        state.ex_mem_stage.block = true;
+        state.id_ex_stage.block = true;
+        state.if_id_stage.block = true;
+        return;
     }
     
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
