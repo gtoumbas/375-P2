@@ -409,7 +409,11 @@ int runCycles(uint32_t cycles){
         dumpPipeState(state.pipe_state); //Testing
     }
     // For testing
+
+
+    state.d_cache->drain();
     printState(std::cout, true);
+
     dumpMemoryState(mem);
     state.pipe_state.cycle = state.cycles;
     dumpPipeState(state.pipe_state);

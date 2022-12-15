@@ -171,6 +171,20 @@ public:
         return (hit) ? CACHE_RET::HIT : CACHE_RET::MISS;
     }
 
+    void drain() {
+        for (int i = 0; i < entries; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if(!cache[i][j].valid || !cache[i][j].dirty) {
+                    continue;
+                }
+                uint32_t addr = (cache[i][j].tag << (index_bits + offset_bits)) + (i << offset_bits);
+                for (int k = 0; k < cfg.blockSize; ++k) {
+                    mem->setMemValue(addr + k, cache[i][j].data[k], BYTE_SIZE);
+                }
+            }
+        }
+    }
+
 	uint32_t Hits() {
 		return hits;
 	}
