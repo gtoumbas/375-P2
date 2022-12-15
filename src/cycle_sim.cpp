@@ -150,7 +150,6 @@ void ID(){
 
     if (state.exception) {
         state.branch_pc = EXCEPTION_ADDR;
-        // Don't need to squash because not truly parallel
         return;
     }
     if (!state.finish) {
@@ -306,6 +305,7 @@ void WB(){
 
     // Check for 0xfeefeed
     if (state.mem_wb_stage.decodedInst.instr == 0xfeedfeed) {
+        std::cout << "GOT TO WB FEEDFEED\n";
         return;
     }
 
@@ -327,114 +327,6 @@ void WB(){
     state.mem_wb_stage.data = writeData; 
 }
 
-
-
-// // Driver stuff
-// int initMemory(std::ifstream & inputProg)
-// {
-//     // Check if mem is already initialized
-
-//     if (inputProg && mem)
-//     {
-//         uint32_t curVal = 0;
-//         uint32_t addr = 0;
-
-//         while (inputProg.read((char *)(&curVal), sizeof(uint32_t)))
-//         {
-//             curVal = ConvertWordToBigEndian(curVal);
-//             int ret = mem->setMemValue(addr, curVal, WORD_SIZE);
-
-//             if (ret)
-//             {
-//                 std::cout << "Could not set memory value!" << std::endl;
-//                 return -EINVAL;
-//             }
-
-//             // We're reading 4 bytes each time...
-//             addr += 4;
-//         }
-//     }
-//     else
-//     {
-//         std::cout << "Invalid file stream or memory image passed, could not initialise memory values" << std::endl;
-//         return -EINVAL;
-//     }
-
-//     return 0;
-// }
-
-// Main function
-// int main(int argc, char *argv[])
-// {
-//     state = {};
-//     state.exec = new EXECUTOR{};
-//     state.hzd = new HAZARD_UNIT{};
-//     state.fwd = new FORWARD_UNIT{};
-//     state.branch_fwd = new BRANCH_FORWARD_UNIT{};
-    
-//     for(int i = 0; i < 32; i++){ state.regs[i] = 0;}
-
-//     std::ifstream prog; 
-//     prog.open(argv[1], std::ios::binary | std::ios::in);
-//     mem = createMemoryStore();
-
-//     if (initMemory(prog))
-//     {
-//         return -EBADF;
-//     }
-    
-//     uint32_t DrainIters = 3;
-//     while (DrainIters--)
-//     {
-//         printState(std::cout, false); 
-//         state.cycles++;
-//         // forwarding units
-//         state.fwd->checkFwd(state);
-//         state.branch_fwd->checkFwd(state);
-
-//         WB();
-        
-
-//         MEM();
-        
-        
-//         EX();
-//         // Arithmetic overflow
-//         if (state.exception) {
-//             std::cout << "EXCEPTION\n";
-//             state.pc = state.branch_pc;
-//             state.exception = false;
-//         }
-
-//         ID();
-
-//         // Illegal Instruction
-//         if (state.exception) {
-//             std::cout << "EXCEPTION\n";
-//             state.pc = state.branch_pc;
-//             state.exception = false;
-//         }
-
-
-//         if (state.finish) {
-//             IF();
-//             continue;
-//         }
-
-
-//         ++DrainIters;
-//         if (state.stall) { 
-//            continue; 
-//         }
-//         IF();
-//     }
-
-
-//     printState(std::cout, true);
-//     dumpMemoryState(mem);
-    
-// }
-
 int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mainMem){
     // Init simulator 
     state = {};
@@ -453,8 +345,7 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 }
 
 int runCycles(uint32_t cycles){
-    // TODO Update pipe_cycle
-    uint32_t DrainIters = 3;
+    uint32_t DrainIters = 4; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
         state.cycles++;
@@ -495,8 +386,9 @@ int runCycles(uint32_t cycles){
         }
         IF();
     }
+    // For testing
     printState(std::cout, true);
- 
+    dumpMemoryState(mem);
     if (finEarly) {
         state.pipe_state.cycle = state.cycles;
         dumpPipeState(state.pipe_state);
@@ -504,3 +396,4 @@ int runCycles(uint32_t cycles){
     }
     return 0;
 }
+
