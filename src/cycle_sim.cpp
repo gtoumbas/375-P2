@@ -246,6 +246,8 @@ void MEM(){
     // forward values
     state.fwd->mem_value = state.ex_mem_stage.aluResult;
     state.branch_fwd->mem_value = state.ex_mem_stage.aluResult;
+    // Update pipestate
+    state.pipe_state.memInstr = state.ex_mem_stage.decodedInst.instr;
 
     // decrement wait_cycles and check if have to wait more
     if ((state.mem_wait_cycles = std::max(state.mem_wait_cycles - 1, 0)) > 0){ // still blocked
@@ -265,8 +267,7 @@ void MEM(){
     uint32_t data;
     int ret = CACHE_RET::HIT;
 
-    // Update pipestate
-    state.pipe_state.memInstr = state.ex_mem_stage.decodedInst.instr;
+
 
     // sw $t0, addr: t0 may be forwarded by the instruction in WB
     switch (state.fwd -> fwdWriteStore) {
@@ -363,7 +364,7 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
     state.branch_fwd = new BRANCH_FORWARD_UNIT{};
     mem = mainMem;
 
-    // TODO init cache
+    // Init Cache
     state.i_cache = new Cache(icConfig, mainMem);
     state.d_cache = new Cache(dcConfig, mainMem);
 
@@ -375,7 +376,7 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 
 int runCycles(uint32_t cycles){
     uint32_t startingCycle = state.sim_stats.totalCycles;
-    uint32_t DrainIters = 4; //FIXME 3 or 4?
+    uint32_t DrainIters = 5; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
         state.fwd->checkFwd(state);
@@ -387,8 +388,6 @@ int runCycles(uint32_t cycles){
         ID();
         if (state.finish) {
             IF();
-
-
             finEarly = true;
             continue;
         }
@@ -413,14 +412,12 @@ int runCycles(uint32_t cycles){
 }
 
 int runTillHalt(){
-    uint32_t DrainIters = 4; //FIXME 3 or 4?
+    uint32_t DrainIters = 5; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
         // printState(std::cout, false);
-
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
-
         WB();
         MEM();
         EX();
