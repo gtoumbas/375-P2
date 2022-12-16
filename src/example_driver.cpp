@@ -2,10 +2,10 @@
 #include <iomanip>
 #include <fstream>
 #include <errno.h>
-#include "MemoryStore.h"
-#include "RegisterInfo.h"
-#include "EndianHelpers.h"
-#include "DriverFunctions.h"
+#include "../src/MemoryStore.h"
+#include "../src/RegisterInfo.h"
+#include "../src/EndianHelpers.h"
+#include "../src/DriverFunctions.h"
 
 using namespace std;
 
@@ -63,15 +63,18 @@ int main(int argc, char **argv)
     CacheConfig icConfig;
     icConfig.cacheSize = 1024;
     icConfig.blockSize = 64;
-    icConfig.type = TWO_WAY_SET_ASSOC;
+    icConfig.type = DIRECT_MAPPED;
     icConfig.missLatency = 5;
     CacheConfig dcConfig = icConfig;
 
     initSimulator(icConfig, dcConfig, mem);
 
-    runCycles(300);
+    runCycles(10);
+
     runTillHalt();
+
     finalizeSimulator();
+
     delete mem;
     return 0;
 }

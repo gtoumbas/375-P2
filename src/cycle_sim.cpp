@@ -108,6 +108,10 @@ int doLoad(STATE& state, uint32_t addr, MemEntrySize size, uint32_t& data)
 void IF(){
     uint32_t instr = 0;
     state.pipe_state.ifInstr = instr;
+
+    if (state.stall){
+        return;
+    }
     
     // decrement wait_cycles and return if still have to wait
     if ((state.if_wait_cycles = std::max(state.if_wait_cycles - 1, 0)) > 0) {   // still blocked
@@ -115,7 +119,7 @@ void IF(){
     }
     
     // fetch instruction if 0xfeedfeed has not been reached 
-    if (!state.finish){
+    if (!state.end_at_id){
         auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
         std::cout << "CACHE ACCESS " << state.pc << ' ' << instr << ' ' << hit << '\n';
         if (hit != CACHE_RET::HIT) {  // miss -> set penalty cycles
@@ -144,7 +148,7 @@ void ID(){
     state.pipe_state.idInstr = instr;
 
     if (instr == 0xfeedfeed) {
-        state.finish = true;
+        state.end_at_id = true;
     }
     DecodedInst decodedInst;
     CONTROL ctrl;
@@ -156,7 +160,7 @@ void ID(){
         state.branch_pc = EXCEPTION_ADDR;
         return;
     }
-    if (!state.finish) {
+    if (!state.end_at_id) {
         state.hzd -> jump = false;  // erase previously written value 
         state.hzd -> checkHazard(state, decodedInst);
     }
@@ -333,6 +337,7 @@ void WB(){
 
     // Check for 0xfeefeed
     if (state.mem_wb_stage.decodedInst.instr == 0xfeedfeed) {
+        state.end_program = true;
         return;
     }
 
@@ -374,11 +379,46 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
     return 1;
 }
 
+// int runCycles(uint32_t cycles){
+//     uint32_t startingCycle = state.sim_stats.totalCycles;
+//     uint32_t DrainIters = 5; //FIXME 3 or 4?
+//     bool finEarly = false;
+//     while (DrainIters--){
+//         state.fwd->checkFwd(state);
+//         state.branch_fwd->checkFwd(state);
+
+//         WB();
+//         MEM();
+//         EX();
+//         ID();
+//         if (state.end_program) {
+//             IF();
+//             finEarly = true;
+//             continue;
+//         }
+
+//         ++DrainIters;
+//         if (state.stall){
+//             state.pipe_state.ifInstr = 0;
+//             continue;
+//         }
+//         IF();
+//     }
+//     printState(std::cout, true);
+
+//     dumpMemoryState(mem);
+//     state.pipe_state.cycle = state.sim_stats.totalCycles;
+//     dumpPipeState(state.pipe_state);
+
+//     if (finEarly) {
+//         return 1;
+//     }
+//     return 0;
+// }
 int runCycles(uint32_t cycles){
     uint32_t startingCycle = state.sim_stats.totalCycles;
-    uint32_t DrainIters = 5; //FIXME 3 or 4?
     bool finEarly = false;
-    while (DrainIters--){
+    while (state.sim_stats.totalCycles < (cycles - 1 + startingCycle)){
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
 
@@ -386,18 +426,12 @@ int runCycles(uint32_t cycles){
         MEM();
         EX();
         ID();
-        if (state.finish) {
-            IF();
-            finEarly = true;
-            continue;
-        }
-
-        ++DrainIters;
-        if (state.stall){
-            state.pipe_state.ifInstr = 0;
-            continue;
-        }
         IF();
+        state.sim_stats.totalCycles++;
+        if(state.end_program){
+            finEarly = true;
+            break;
+        }
     }
     printState(std::cout, true);
 
@@ -411,10 +445,10 @@ int runCycles(uint32_t cycles){
     return 0;
 }
 
+
 int runTillHalt(){
-    uint32_t DrainIters = 5; //FIXME 3 or 4?
-    bool finEarly = false;
-    while (DrainIters--){
+    // uint32_t DrainIters = 5; {
+    while(!state.end_program){
         // printState(std::cout, false);
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
@@ -422,22 +456,22 @@ int runTillHalt(){
         MEM();
         EX();
         ID();
-        if (state.finish) {
-            IF();
-            finEarly = true;
-            state.sim_stats.totalCycles++;
-            continue;
-        }
+        // if (state.finish) {
+        //     IF();
+        //     state.sim_stats.totalCycles++;
+        //     continue;
+        // }
 
-        ++DrainIters;
-        if (state.stall){
-            state.pipe_state.ifInstr = 0;
-            state.sim_stats.totalCycles++;
-            continue;
-        }
+        // ++DrainIters; 
+        // if (state.stall){ // Does it matter having in IF stage
+        //     state.pipe_state.ifInstr = 0;
+        //     state.sim_stats.totalCycles++;
+        //     continue;
+        // }
         IF();
         state.sim_stats.totalCycles++;
-    }
+    } 
+
     printState(std::cout, true);
 
     dumpMemoryState(mem);

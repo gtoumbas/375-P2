@@ -40,7 +40,8 @@ struct STATE
     Cache *i_cache, *d_cache;
     bool stall;
     bool exception;
-    bool finish; 
+    bool end_at_id;
+    bool end_program;
 };
 
 
