@@ -1,0 +1,64 @@
+Running fib_small.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running fib.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_addi.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_branch_ex_haz.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running load_use.bin
+Mem Outputs are the same
+Reg Outputs are DIFFERENT
+----------------------------------------
+Running test_branch_haz.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_branch_load_haz.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_branch_load_haz2.bin
+Mem Outputs are the same
+Reg Outputs are DIFFERENT
+----------------------------------------
+Running test_branch.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_fwd.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_J.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_lw.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_regs.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_store.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test_write_store_haz.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------
+Running test.bin
+Mem Outputs are the same
+Reg Outputs are the same
+----------------------------------------

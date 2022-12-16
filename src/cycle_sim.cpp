@@ -122,7 +122,7 @@ void IF(){
     if (!state.end_at_id){
         auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
         if (hit != CACHE_RET::HIT && (state.i_cache -> Penalty() > 0)) {  // miss -> set penalty cycles
-            state.if_wait_cycles = state.i_cache -> Penalty() - 1;
+            state.if_wait_cycles = state.i_cache -> Penalty();
             return;
         }
     }
@@ -163,12 +163,13 @@ void ID(){
     }
 
 
-    if (state.stall || (JB_OP.count(decodedInst.op) > 0 && decodedInst.op != OP_JAL)){
-        state.id_ex_stage = ID_EX_STAGE{};
-        return;
-    }
-
     if (!state.id_ex_stage.block){
+
+        if (state.stall || (JB_OP.count(decodedInst.op) > 0 && decodedInst.op != OP_JAL)){
+            state.id_ex_stage = ID_EX_STAGE{};
+            return;
+        }
+
         state.id_ex_stage.decodedInst = decodedInst;
         state.id_ex_stage.npc = state.if_id_stage.npc;
         state.id_ex_stage.readData1 = state.regs[decodedInst.rs];
@@ -306,7 +307,7 @@ void MEM(){
     }
 
     if (ret != CACHE_RET::HIT && (state.d_cache -> Penalty() > 0)) {    // if miss -> block all storages before this one
-        state.mem_wait_cycles = state.d_cache->Penalty() - 1;
+        state.mem_wait_cycles = state.d_cache->Penalty();
         state.ex_mem_stage.block = true;
         state.id_ex_stage.block = true;
         state.if_id_stage.block = true;

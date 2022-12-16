@@ -1,5 +1,5 @@
-Total cycles:       28
-I-cache hits:       8
-I-cache misses:     8
-D-cache hits:       0
-D-cache misses:     0
+Total cycles:       20
+I-cache hits:       11
+I-cache misses:     1
+D-cache hits:       2
+D-cache misses:     1

@@ -9,7 +9,6 @@ bin_files=(
     "test_branch_load_haz2.bin"
     "test_branch.bin"
     "test_fwd.bin"
-    "test_J.bin"
     "test_lw.bin"
     "test_regs.bin"
     "test_store.bin"
