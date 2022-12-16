@@ -69,8 +69,9 @@ int main(int argc, char **argv)
 
     initSimulator(icConfig, dcConfig, mem);
 
-    runCycles(10000);
-    // runTillHalt();
+    // runCycles(10000);
+    runTillHalt();
+    finalizeSimulator();
     delete mem;
     return 0;
 }

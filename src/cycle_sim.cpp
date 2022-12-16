@@ -374,13 +374,6 @@ int runCycles(uint32_t cycles){
     uint32_t DrainIters = 4; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
-        printState(std::cout, false);
-        if (state.cycles == (cycles - 1 + startingCycle)) {
-            break;
-        }
-        state.pipe_state.cycle = state.cycles; // For testing
-        state.cycles++;
-
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
 
@@ -390,7 +383,8 @@ int runCycles(uint32_t cycles){
         ID();
         if (state.finish) {
             IF();
-            dumpPipeState(state.pipe_state); //Testing
+
+
             finEarly = true;
             continue;
         }
@@ -398,16 +392,10 @@ int runCycles(uint32_t cycles){
         ++DrainIters;
         if (state.stall){
             state.pipe_state.ifInstr = 0;
-            dumpPipeState(state.pipe_state); //Testing
             continue;
         }
         IF();
-        dumpPipeState(state.pipe_state); //Testing
     }
-    // For testing
-
-
-    state.d_cache->drain();
     printState(std::cout, true);
 
     dumpMemoryState(mem);
@@ -421,27 +409,79 @@ int runCycles(uint32_t cycles){
 }
 
 int runTillHalt(){
-    uint32_t cycles = 0;
-    while (runCycles(cycles) == 0) {
-        cycles += 4; // Is this problematic. Could potentially reset value of 
-        // DrainIters to 4 right?
+    uint32_t DrainIters = 4; //FIXME 3 or 4?
+    bool finEarly = false;
+    while (DrainIters--){
+        // printState(std::cout, false);
+
+        state.fwd->checkFwd(state);
+        state.branch_fwd->checkFwd(state);
+
+        WB();
+        MEM();
+        EX();
+        ID();
+        if (state.finish) {
+            IF();
+            finEarly = true;
+            state.cycles++;
+            continue;
+        }
+
+        ++DrainIters;
+        if (state.stall){
+            state.pipe_state.ifInstr = 0;
+            state.cycles++;
+            continue;
+        }
+        IF();
+        state.cycles++;
     }
-    return 0;
+    printState(std::cout, true);
+
+    dumpMemoryState(mem);
+    state.pipe_state.cycle = state.cycles;
+    dumpPipeState(state.pipe_state);
+
 }
 
 
 int finalizeSimulator(){
     SimulationStats stats = {};
     stats.totalCycles = state.cycles + 1; // Start at zero 
-    // TODO implement cache stats 
-    printSimStats(stats);
+    // Finish CACHE stats
 
     // Write back dirty cache values, does not need to be cycle accurate
-    // TODO
+    state.d_cache->drain();
 
-    //Dump RegisterInfo TODO
 
-    // Dump Memory
+    //Dump RegisterInfo
+    RegisterInfo regInfo = {};
+    regInfo.at = state.regs[REG_AT];
+    for (int i = 0; i < V_REG_SIZE; i++){
+        regInfo.v[i] = state.regs[REG_V0 + i];
+    }
+    for (int i = 0; i < A_REG_SIZE; i++){
+        regInfo.a[i] = state.regs[REG_A0 + i];
+    }
+    for (int i = 0; i < T_REG_SIZE-2; i++){
+        regInfo.t[i] = state.regs[REG_T0 + i];
+    }
+    for (int i = 0; i < S_REG_SIZE; i++){
+        regInfo.s[i] = state.regs[REG_S0 + i];
+    }
+    regInfo.t[8]= state.regs[REG_T8];
+    regInfo.t[9] = state.regs[REG_T9];
+    for (int i = 0; i < K_REG_SIZE; i++){
+        regInfo.k[i] = state.regs[REG_K0 + i];
+    }
+    regInfo.gp = state.regs[REG_GP];
+    regInfo.sp = state.regs[REG_SP];
+    regInfo.fp = state.regs[REG_FP];
+    regInfo.ra = state.regs[REG_RA];
+
+    printSimStats(stats);
+    dumpRegisterState(regInfo);
     dumpMemoryState(mem);
 
     return 0;
