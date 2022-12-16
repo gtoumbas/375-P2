@@ -465,6 +465,10 @@ int runTillHalt(){
 int finalizeSimulator(){
     // Write back dirty cache values, does not need to be cycle accurate
     state.d_cache->drain();
+    state.sim_stats.icHits = state.i_cache->Hits();
+    state.sim_stats.icMisses = state.i_cache->Misses();
+    state.sim_stats.dcHits = state.d_cache->Hits();
+    state.sim_stats.dcMisses = state.d_cache->Misses();
 
 
     //Dump RegisterInfo
