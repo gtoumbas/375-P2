@@ -121,13 +121,10 @@ void IF(){
     // fetch instruction if 0xfeedfeed has not been reached 
     if (!state.end_at_id){
         auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
-        std::cout << "CACHE ACCESS " << state.pc << ' ' << instr << ' ' << hit << '\n';
-        if (hit != CACHE_RET::HIT) {  // miss -> set penalty cycles
-            state.sim_stats.icMisses++;
+        if (hit != CACHE_RET::HIT && (state.i_cache -> Penalty() > 0)) {  // miss -> set penalty cycles
             state.if_wait_cycles = state.i_cache -> Penalty() - 1;
             return;
         }
-        state.sim_stats.icHits++;
     }
     // update pipe state
     state.pipe_state.ifInstr = instr;
@@ -222,7 +219,6 @@ void EX()
         if (op == OP_ZERO) {
             state.exec -> executeR(state);
         } else if (I_TYPE_NO_LS.count(op) != 0 || LOAD_OP.count(op) != 0  || STORE_OP.count(op) != 0) {
-            std::cout << "------------------------------------------------------\n";
             state.exec -> executeI(state);
         } // branch and jump finished by this time
     }
@@ -238,7 +234,6 @@ void EX()
         state.ex_mem_stage.decodedInst = state.id_ex_stage.decodedInst;
         state.ex_mem_stage.npc = state.id_ex_stage.npc;
         state.ex_mem_stage.ctrl = state.id_ex_stage.ctrl;
-        std::cout << "READ DATA 2 VALUE FOR INSTRUCTION " << state.id_ex_stage.decodedInst.instr << " is " << state.id_ex_stage.readData2 << '\n'; 
         state.ex_mem_stage.setMemValue = state.id_ex_stage.readData2;
         state.id_ex_stage = ID_EX_STAGE{};
     }
@@ -286,7 +281,6 @@ void MEM(){
         switch(op){
             // Storing
             case OP_SW:
-                std::cout << "SW in MEM(): " << addr << ' ' << setValue << '\n';
                 ret = state.d_cache->setCacheValue(addr, setValue, WORD_SIZE); 
                 break;
             case OP_SH:
@@ -311,15 +305,13 @@ void MEM(){
         }
     }
 
-    if (ret != CACHE_RET::HIT) {    // if miss -> block all storages before this one
-        state.sim_stats.dcMisses++;
+    if (ret != CACHE_RET::HIT && (state.d_cache -> Penalty() > 0)) {    // if miss -> block all storages before this one
         state.mem_wait_cycles = state.d_cache->Penalty() - 1;
         state.ex_mem_stage.block = true;
         state.id_ex_stage.block = true;
         state.if_id_stage.block = true;
         return;
     }
-    state.sim_stats.dcHits++;
     
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
