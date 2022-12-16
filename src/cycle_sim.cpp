@@ -23,7 +23,7 @@ extern void dumpRegisterStateInternal(RegisterInfo & reg, std::ostream & reg_out
 // Print State
 void printState(std::ostream & out, bool printReg)
 {
-    out << "\nState at beginning of cycle " << state.cycles << ":" << std::endl;
+    out << "\nState at beginning of cycle " << state.sim_stats.totalCycles << ":" << std::endl;
     out << "PC: " << std::hex << state.pc << std::endl;
     out << "IF/ID: " << std::hex << state.if_id_stage.instr << std::endl;
     out << "ID/EX: " << std::hex << state.id_ex_stage.decodedInst.instr << std::endl;
@@ -118,10 +118,12 @@ void IF(){
     if (!state.finish){
         auto hit = state.i_cache->getCacheValue(state.pc, instr, WORD_SIZE);
         std::cout << "CACHE ACCESS " << state.pc << ' ' << instr << ' ' << hit << '\n';
-        if (hit != CACHE_RET::HIT) {                                            // miss -> set penalty cycles
+        if (hit != CACHE_RET::HIT) {  // miss -> set penalty cycles
+            state.sim_stats.icMisses++;
             state.if_wait_cycles = state.i_cache -> Penalty() - 1;
             return;
         }
+        state.sim_stats.icHits++;
     }
     // update pipe state
     state.pipe_state.ifInstr = instr;
@@ -305,12 +307,14 @@ void MEM(){
     }
 
     if (ret != CACHE_RET::HIT) {    // if miss -> block all storages before this one
+        state.sim_stats.dcMisses++;
         state.mem_wait_cycles = state.d_cache->Penalty() - 1;
         state.ex_mem_stage.block = true;
         state.id_ex_stage.block = true;
         state.if_id_stage.block = true;
         return;
     }
+    state.sim_stats.dcHits++;
     
     state.mem_wb_stage.decodedInst = state.ex_mem_stage.decodedInst;
     state.mem_wb_stage.aluResult = state.ex_mem_stage.aluResult;
@@ -370,7 +374,7 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 }
 
 int runCycles(uint32_t cycles){
-    uint32_t startingCycle = state.cycles;
+    uint32_t startingCycle = state.sim_stats.totalCycles;
     uint32_t DrainIters = 4; //FIXME 3 or 4?
     bool finEarly = false;
     while (DrainIters--){
@@ -399,7 +403,7 @@ int runCycles(uint32_t cycles){
     printState(std::cout, true);
 
     dumpMemoryState(mem);
-    state.pipe_state.cycle = state.cycles;
+    state.pipe_state.cycle = state.sim_stats.totalCycles;
     dumpPipeState(state.pipe_state);
 
     if (finEarly) {
@@ -424,33 +428,29 @@ int runTillHalt(){
         if (state.finish) {
             IF();
             finEarly = true;
-            state.cycles++;
+            state.sim_stats.totalCycles++;
             continue;
         }
 
         ++DrainIters;
         if (state.stall){
             state.pipe_state.ifInstr = 0;
-            state.cycles++;
+            state.sim_stats.totalCycles++;
             continue;
         }
         IF();
-        state.cycles++;
+        state.sim_stats.totalCycles++;
     }
     printState(std::cout, true);
 
     dumpMemoryState(mem);
-    state.pipe_state.cycle = state.cycles;
+    state.pipe_state.cycle = state.sim_stats.totalCycles;
     dumpPipeState(state.pipe_state);
 
 }
 
 
 int finalizeSimulator(){
-    SimulationStats stats = {};
-    stats.totalCycles = state.cycles + 1; // Start at zero 
-    // Finish CACHE stats
-
     // Write back dirty cache values, does not need to be cycle accurate
     state.d_cache->drain();
 
@@ -480,7 +480,7 @@ int finalizeSimulator(){
     regInfo.fp = state.regs[REG_FP];
     regInfo.ra = state.regs[REG_RA];
 
-    printSimStats(stats);
+    printSimStats(state.sim_stats);
     dumpRegisterState(regInfo);
     dumpMemoryState(mem);
 

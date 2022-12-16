@@ -32,6 +32,7 @@ struct STATE
     EX_MEM_STAGE ex_mem_stage;
     MEM_WB_STAGE mem_wb_stage;
     PipeState pipe_state;
+    SimulationStats sim_stats;
     FORWARD_UNIT* fwd;
     BRANCH_FORWARD_UNIT* branch_fwd;  
     HAZARD_UNIT*  hzd;
