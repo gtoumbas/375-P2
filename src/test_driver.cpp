@@ -61,10 +61,10 @@ int main(int argc, char **argv)
     }
 
     CacheConfig icConfig;
-    icConfig.cacheSize = 16;
+    icConfig.cacheSize = 8;
     icConfig.blockSize = 4;
-    icConfig.type = DIRECT_MAPPED;
-    icConfig.missLatency = 5;
+    icConfig.type = TWO_WAY_SET_ASSOC;
+    icConfig.missLatency = 0;
     CacheConfig dcConfig = icConfig;
 
     initSimulator(icConfig, dcConfig, mem);
