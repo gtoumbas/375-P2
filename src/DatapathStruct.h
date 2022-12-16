@@ -169,7 +169,6 @@ struct HAZARD_UNIT
             checkLoadUse(state);
         } else {                // check jump or branch: op = J, JAL, BEQ, BNE
             checkBranch(state, decodedInst);
-            std::cout << "EXITING checkHazard()\n";
         }
     }
 
@@ -203,12 +202,10 @@ private:
         if (op == OP_BNE || op == OP_BEQ) {
             switch (state.branch_fwd -> fwd1) {
                 case BRANCH_EX_HAZ:         // cant be load, because loaduse would handle this. 1 stall and fwd
-                    std::cout << "BRANCH_EX_HAZ 1\n";
                     state.stall = true;
                     return;
                 case BRANCH_MEM_HAZ:        // no stalls, fwd
                     readReg1 = state.branch_fwd -> mem_value;
-                    std::cout << "BRANCH_MEM_HAZ 1: " << readReg1 <<'\n';
                     break;
                 case BRANCH_LOAD_MEM_HAZ:   // 1 stall and fwd
                     state.stall = true;
@@ -222,11 +219,9 @@ private:
             // do forwarding
             switch (state.branch_fwd -> fwd2) {
                 case BRANCH_EX_HAZ:
-                    std::cout << "BRANCH_EX_HAZ 1\n";
                     state.stall = true;
                     return;
                 case BRANCH_MEM_HAZ:
-                    std::cout << "BRANCH_MEM_HAZ 2: " << readReg2 << '\n';
                     readReg2 = state.branch_fwd -> mem_value;
                     break;
                 case BRANCH_LOAD_MEM_HAZ:
@@ -239,8 +234,6 @@ private:
                     readReg2 = state.regs[decodedInst.rt];
             }
         }
-
-        std::cout << "COMPARE VALUES ARE " << readReg1 << ' ' <<  readReg2 << '\n';
 
         switch (op) {
             case OP_BEQ:
@@ -439,7 +432,6 @@ struct EXECUTOR
                 break;
             case OP_SW:
                 aluResult = addr;
-                std::cout << "SW address " << aluResult << '\n';
                 break;
             case OP_SH:
                 aluResult = addr;
