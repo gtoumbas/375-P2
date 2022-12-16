@@ -426,7 +426,7 @@ int runCycles(uint32_t cycles){
             break;
         }
     }
-    printState(std::cout, true);
+    // printState(std::cout, true);
 
     dumpMemoryState(mem);
     state.pipe_state.cycle = state.sim_stats.totalCycles - 1;
@@ -453,7 +453,7 @@ int runTillHalt(){
         state.sim_stats.totalCycles++;
     } 
 
-    printState(std::cout, true);
+    // printState(std::cout, true);
 
     dumpMemoryState(mem);
     state.pipe_state.cycle = state.sim_stats.totalCycles-1;
