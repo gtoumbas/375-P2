@@ -411,7 +411,7 @@ int initSimulator(CacheConfig &icConfig, CacheConfig &dcConfig, MemoryStore *mai
 int runCycles(uint32_t cycles){
     uint32_t startingCycle = state.sim_stats.totalCycles;
     bool finEarly = false;
-    while (state.sim_stats.totalCycles < (cycles - 1 + startingCycle)){
+    while (state.sim_stats.totalCycles < (cycles + startingCycle)){
         state.fwd->checkFwd(state);
         state.branch_fwd->checkFwd(state);
 
@@ -429,7 +429,7 @@ int runCycles(uint32_t cycles){
     printState(std::cout, true);
 
     dumpMemoryState(mem);
-    state.pipe_state.cycle = state.sim_stats.totalCycles;
+    state.pipe_state.cycle = state.sim_stats.totalCycles - 1;
     dumpPipeState(state.pipe_state);
 
     if (finEarly) {
@@ -456,7 +456,7 @@ int runTillHalt(){
     printState(std::cout, true);
 
     dumpMemoryState(mem);
-    state.pipe_state.cycle = state.sim_stats.totalCycles;
+    state.pipe_state.cycle = state.sim_stats.totalCycles-1;
     dumpPipeState(state.pipe_state);
 
 }
