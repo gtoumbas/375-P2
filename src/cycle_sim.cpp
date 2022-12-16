@@ -337,6 +337,7 @@ void WB(){
 
     // Check for 0xfeefeed
     if (state.mem_wb_stage.decodedInst.instr == 0xfeedfeed) {
+        state.pipe_state.wbInstr = 0;
         state.end_program = true;
         return;
     }
@@ -456,18 +457,6 @@ int runTillHalt(){
         MEM();
         EX();
         ID();
-        // if (state.finish) {
-        //     IF();
-        //     state.sim_stats.totalCycles++;
-        //     continue;
-        // }
-
-        // ++DrainIters; 
-        // if (state.stall){ // Does it matter having in IF stage
-        //     state.pipe_state.ifInstr = 0;
-        //     state.sim_stats.totalCycles++;
-        //     continue;
-        // }
         IF();
         state.sim_stats.totalCycles++;
     } 
